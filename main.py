@@ -19,7 +19,38 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def track(segmentation_dir_name: str, max_edge_distance: float):
+def track(segmentation_dir_name: str, max_edge_distance: float, frac: float = 0.1):
+    """
+    This function does three things:
+
+    Step 1. First it sets up a candidate graph using available GT detections and by
+    connecting neighbors within `max_edge_distance`. Then a solution is obtained
+    using default weights for IoU edge cost and appearance node cost.
+
+    Step 2. Next, the actual ground truth graph is created using the `man_track.txt`
+    text file provided by CTC website for this dataset (available within the
+    `segmentation_dir_name` directory).
+
+    Step 3. A fraction of the nodes are randomly sampled and the outgoing edges
+    from these nodes are either specified to be `True` if they are indeed the
+    ground truth edge or `False` if they are a candidate, non ground truth edge. Next, we try to
+    identify best weights using SSVM.
+
+
+    Parameters
+    ----------
+    segmentation_dir_name : str
+        segmentation_dir_name is the path to the `TRA` directory containing all
+        tif images.
+    max_edge_distance : float
+        max_edge_distance is used to connect nodes that lie at an L2 distance
+        lesser than max_edge_distance while constructing a candidate graph
+        (see Step 1 above).
+    frac: float (between 0.0 and 1.0)
+        Fraction of the nodes for which the "gt" attribute is specified, while
+        fitting weights using SSVM. Default = 0.1
+    """
+    # Step 1 ------------------------------
 
     # obtain masks
     filenames = natsorted(glob(segmentation_dir_name + "/*.tif"))
@@ -63,7 +94,7 @@ def track(segmentation_dir_name: str, max_edge_distance: float):
     print(f"Number of selected edges in solution graph is {len(selected_edges)}")
     print(f"Number of selected nodes in solution graph is {len(selected_nodes)}")
 
-    # ------------------------------
+    # Step 2 ------------------------------
 
     # build ground truth track graph
     # add nodes
@@ -100,17 +131,17 @@ def track(segmentation_dir_name: str, max_edge_distance: float):
     print(f"Number of edges in groundtruth graph is {len(groundtruth_graph.edges())}")
     print(f"Number of nodes in groundtruth graph is {len(groundtruth_graph.nodes())}")
 
-    # ---------------------------------
+    # Step 3 ---------------------------------
 
     ## fitting weights now ...
 
-    # Let's say around 10 percent of the edges are correct.
-    # We randomly sample 10 percent of the nodes and then set the actual (g.t.)
+    # Let's say around 10 percent (specified by `frac`)of the edges are correct.
+    # We randomly sample 10 percent (or, `frac`) of the nodes and then set the actual (g.t.)
     # outgoing edge to be True and the other (candidate, non g.t.) ones to be False.
 
     for node_id in track_graph.nodes:
         t = np.random.rand(1)
-        if t <= 0.1:
+        if t <= frac:
             for edge_id in list(track_graph.next_edges[node_id]):
                 if edge_id in groundtruth_track_graph.edges:
                     track_graph.edges[edge_id]["gt"] = True
