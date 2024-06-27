@@ -149,7 +149,7 @@ def track(segmentation_dir_name: str, max_edge_distance: float, frac: float = 0.
                     track_graph.edges[edge_id]["gt"] = False
 
     # fit weights
-    solver.fit_weights(gt_attribute="gt", regularizer_weight=1e-3, max_iterations=1000)
+    solver.fit_weights(gt_attribute="gt", regularizer_weight=1e2, max_iterations=1000)
     optimal_weights = solver.weights
     print(f"After fitting, optimal weights are {optimal_weights}")
 
