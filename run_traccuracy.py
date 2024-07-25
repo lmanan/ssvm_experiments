@@ -7,9 +7,9 @@ import pprint
 
 pp = pprint.PrettyPrinter(indent=4)
 
-gt_data=load_ctc_data(data_dir='/Users/lalitm/Desktop/data/CTC/Fluo-N2DL-HeLa/01_GT/TRA', track_path='/Users/lalitm/Desktop/data/CTC/Fluo-N2DL-HeLa/01_GT/TRA/man_track.txt', name= 'HeLa-01_GT')
+gt_data=load_ctc_data(data_dir='./Fluo-N2DL-HeLa/01_GT/TRA', track_path='./Fluo-N2DL-HeLa/01_GT/TRA/man_track.txt', name= 'HeLa-01_GT')
 
-pred_data = load_ctc_data(data_dir='/Users/lalitm/Desktop/github/ssvm_experiments/01_RES_SSVM', track_path='/Users/lalitm/Desktop/github/ssvm_experiments/01_RES_SSVM/res_track.txt', name='HeLa-01_RES')
+pred_data = load_ctc_data(data_dir='./01_RES_SSVM', track_path='./01_RES_SSVM/res_track.txt', name='HeLa-01_RES')
 
 
 ctc_results = run_metrics(gt_data=gt_data, pred_data = pred_data, matcher = CTCMatcher(), metrics=[CTCMetrics(), DivisionMetrics()])
