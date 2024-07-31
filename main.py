@@ -1,6 +1,5 @@
 import tifffile
 import numpy as np
-from glob import glob
 from natsort import natsorted
 import argparse
 from motile_toolbox.candidate_graph import (
@@ -14,8 +13,9 @@ from motile.solver import Solver
 from motile.constraints import MaxParents, MaxChildren
 from motile.costs import Appear, Disappear, Split, EdgeDistance
 import logging
-import subprocess
 from saving_utils import save_result_tifs_res_track
+from pathlib import Path
+from run_traccuracy import compute_metrics
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s %(name)s %(levelname)-8s %(message)s"
@@ -81,7 +81,7 @@ def track(
     # Step 1 ------------------------------
 
     # obtain train masks
-    train_filenames = natsorted(glob(train_segmentation_dir_name + "/*.tif"))
+    train_filenames = natsorted(list(Path(train_segmentation_dir_name).glob("*.tif")))
     train_segmentation = []
     for train_filename in train_filenames:
         train_segmentation.append(tifffile.imread(train_filename))
@@ -91,7 +91,7 @@ def track(
     ]  # requires a hypothesis channel
 
     # obtain val masks
-    val_filenames = natsorted(glob(val_segmentation_dir_name + "/*.tif"))
+    val_filenames = natsorted(list(Path(val_segmentation_dir_name).glob("*.tif")))
     val_segmentation = []
     for val_filename in val_filenames:
         val_segmentation.append(tifffile.imread(val_filename))
@@ -124,7 +124,9 @@ def track(
     groundtruth_graph, node_frame_dict = nodes_from_segmentation(train_segmentation)
 
     # add edges
-    gt_data = np.loadtxt(train_segmentation_dir_name + "/man_track.txt", delimiter=" ")
+    gt_data = np.loadtxt(
+        Path(train_segmentation_dir_name).joinpath("man_track.txt"), delimiter=" "
+    )
 
     gt_dict = {}
     for row in gt_data:
@@ -188,7 +190,7 @@ def track(
         output_tif_dir="01_RES_SSVM",
     )
     print("Computing scores ...")
-    subprocess.call(["python ./run_traccuracy.py"], shell=True)
+    compute_metrics(val_segmentation_dir_name=val_segmentation_dir_name)
 
 
 if __name__ == "__main__":
