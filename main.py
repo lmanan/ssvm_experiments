@@ -16,6 +16,9 @@ import logging
 from saving_utils import save_result_tifs_res_track
 from pathlib import Path
 from run_traccuracy import compute_metrics
+from division_costs import HyperEdgeDistance, HyperSplit
+from itertools import combinations
+
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s %(name)s %(levelname)-8s %(message)s"
@@ -23,16 +26,58 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def add_costs_and_constraints(solver):
+def add_hyper_elements(candidate_graph):
+    nodes_original = list(candidate_graph.nodes)
+    for node in nodes_original:
+        out_edges = candidate_graph.out_edges(node)
+        pairs = list(combinations(out_edges, 2))
+        for pair in pairs:
+            candidate_graph.add_node(
+                str(pair[0][0]) + "_" + str(pair[0][1]) + "_" + str(pair[1][1])
+            )
+            candidate_graph.add_edge(
+                pair[0][0],
+                str(pair[0][0] + "_" + str(pair[0][1]) + "_" + str(pair[1][1])),
+            )
+            candidate_graph.add_edge(
+                str(pair[0][0]) + "_" + str(pair[0][1]) + "_" + str(pair[1][1]),
+                pair[0][1],
+            )
+            candidate_graph.add_edge(
+                str(pair[0][0]) + "_" + str(pair[0][1]) + "_" + str(pair[1][1]),
+                pair[1][1],
+            )
+    return candidate_graph
+
+
+def add_costs_and_constraints(solver, symmetric_division_cost):
     solver.add_constraints(MaxParents(1))
-    solver.add_constraints(MaxChildren(2))
-    solver.add_costs(
-        EdgeDistance(
-            weight=10.0, constant=-10.0, position_attribute=NodeAttr.POS.value
-        ),
-        name="Position",
-    )
-    solver.add_costs(Split(constant=0.5), name="Division")
+    if symmetric_division_cost:
+        solver.add_constraints(MaxChildren(1))
+    else:
+        solver.add_constraints(MaxChildren(2))
+
+    if symmetric_division_cost:
+        solver.add_costs(
+            HyperEdgeDistance(
+                weight=1.0,
+                constant=-20.0,
+                position_attribute=NodeAttr.POS.value,
+            ),
+            name="Position",
+        )
+        solver.add_costs(
+            HyperSplit(weight=1.0, constant=0.0, position_attribute=NodeAttr.POS.value),
+            name="Division",
+        )
+    else:
+        solver.add_costs(
+            EdgeDistance(
+                weight=1.0, constant=-20.0, position_attribute=NodeAttr.POS.value
+            ),
+            name="Position",
+        )
+        solver.add_costs(Split(constant=0.5), name="Division")
     solver.add_costs(Appear(constant=0.6))
     solver.add_costs(Disappear(constant=0.6))
     return solver
@@ -43,6 +88,7 @@ def track(
     val_segmentation_dir_name: str,
     max_edge_distance: float,
     regularizer_weight: float,
+    symmetric_division_cost: bool,
 ):
     """
     This function does four things:
@@ -77,6 +123,13 @@ def track(
         max_edge_distance is used to connect nodes that lie at an L2 distance
         lesser than max_edge_distance while constructing a candidate graph
         (see Step 1 above).
+    regularizer_weight: float
+
+    symmetric_division_cost: bool, default=False
+        If this is set to `True`, hyper-edges are used to connect a parent node
+        with two daughter nodes.
+        This leads to a slightly different set of constraints.
+        Additionally, the cost for division is different.
     """
     # Step 1 ------------------------------
 
@@ -102,11 +155,18 @@ def track(
     train_candidate_graph, _ = get_candidate_graph(
         segmentation=train_segmentation, max_edge_distance=max_edge_distance, iou=False
     )
+    if symmetric_division_cost:
+        print(" Adding hyper elements to train candidate graph ...")
+        train_candidate_graph = add_hyper_elements(train_candidate_graph)
 
     # get val candidate graph
     val_candidate_graph, _ = get_candidate_graph(
         segmentation=val_segmentation, max_edge_distance=max_edge_distance, iou=False
     )
+
+    if symmetric_division_cost:
+        print(" Adding hyper elements to val candidate graph ...")
+        val_candidate_graph = add_hyper_elements(val_candidate_graph)
 
     # build a train track graph
     train_track_graph = TrackGraph(
@@ -127,11 +187,20 @@ def track(
     gt_data = np.loadtxt(
         Path(train_segmentation_dir_name).joinpath("man_track.txt"), delimiter=" "
     )
-
+    parent_daughter_dict = {}
     gt_dict = {}
+
     for row in gt_data:
         id_, t_st, t_end, parent_id = int(row[0]), int(row[1]), int(row[2]), int(row[3])
         gt_dict[id_] = [t_st, t_end]
+
+    for row in gt_data:
+        id_, t_st, t_end, parent_id = int(row[0]), int(row[1]), int(row[2]), int(row[3])
+        if parent_id in parent_daughter_dict.keys():
+            pass
+        else:
+            parent_daughter_dict[parent_id] = []
+        parent_daughter_dict[parent_id].append(id_)
 
     for row in gt_data:
         id_, t_st, t_end, parent_id = int(row[0]), int(row[1]), int(row[2]), int(row[3])
@@ -142,10 +211,32 @@ def track(
             )
 
         if parent_id != 0:
-            groundtruth_graph.add_edge(
-                str(gt_dict[parent_id][1]) + "_" + str(parent_id),
-                str(t_st) + "_" + str(id_),
-            )
+            time_parent = gt_dict[parent_id][1]
+            temp_node = str(time_parent) + "_" + str(parent_id)
+            for daughter_index in range(len(parent_daughter_dict[parent_id])):
+                temp_node += (
+                    "_"
+                    + str(t_st)
+                    + "_"
+                    + str(parent_daughter_dict[parent_id][daughter_index])
+                )
+            if symmetric_division_cost:
+                groundtruth_graph.add_node(temp_node)
+                groundtruth_graph.add_edge(
+                    str(gt_dict[parent_id][1]) + "_" + str(parent_id), temp_node
+                )
+                for daughter_index in range(len(parent_daughter_dict[parent_id])):
+                    groundtruth_graph.add_edge(
+                        temp_node,
+                        str(t_st)
+                        + "_"
+                        + str(parent_daughter_dict[parent_id][daughter_index]),
+                    )
+            else:
+                groundtruth_graph.add_edge(
+                    str(gt_dict[parent_id][1]) + "_" + str(parent_id),
+                    str(t_st) + "_" + str(id_),
+                )
 
     # build a groundtruth track graph
 
@@ -168,7 +259,7 @@ def track(
 
     # fit weights
     solver = Solver(track_graph=train_track_graph)
-    solver = add_costs_and_constraints(solver)
+    solver = add_costs_and_constraints(solver, symmetric_division_cost)
     solver.fit_weights(
         gt_attribute="gt", regularizer_weight=regularizer_weight, max_iterations=1000
     )
@@ -178,7 +269,7 @@ def track(
     # Step 4 ---------------------------------
 
     solver = Solver(track_graph=val_track_graph)
-    solver = add_costs_and_constraints(solver)
+    solver = add_costs_and_constraints(solver, symmetric_division_cost)
     solver.weights.from_ndarray(optimal_weights.to_ndarray())
 
     solution = solver.solve(verbose=True)
@@ -209,6 +300,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "--regularizer_weight", dest="regularizer_weight", default=1e2, type=float
     )
+    parser.add_argument(
+        "--symmetric_division_cost",
+        dest="symmetric_division_cost",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+    )
     args = parser.parse_args()
     print("+" * 10)
     print(args)
@@ -218,4 +315,5 @@ if __name__ == "__main__":
         val_segmentation_dir_name=args.val_segmentation_dir_name,
         max_edge_distance=args.max_edge_distance,
         regularizer_weight=args.regularizer_weight,
+        symmetric_division_cost=args.symmetric_division_cost,
     )
