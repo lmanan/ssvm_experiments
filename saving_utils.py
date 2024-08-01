@@ -75,27 +75,26 @@ def save_result_tifs_res_track(solution_nx_graph, segmentation, output_tif_dir):
                     tracked_masks[t_out2][segmentation[t_out2] == id_out2] = id_counter
                     res_track[id_counter] = [t_out2, t_out2, new_mapping[in_node]]
                     id_counter += 1
-    
+
     # in case there are edges that start and end at the same node, we do a
     # little more
     for node in solution_nx_graph.nodes():
-        t, id_node = node.split('_')
+        t, id_node = node.split("_")
         t, id_node = int(t), int(id_node)
         if node in new_mapping.keys():
             pass
         else:
             res_track[id_counter] = [t, t, 0]
             new_mapping[node] = id_counter
-            
+
             tracked_masks[t][segmentation[t] == id_node] = id_counter
             id_counter += 1
 
-
-
-
     # ensure that path where tifs will be saved, exists.
     if Path(output_tif_dir).exists():
-        pass
+        filenames = list(Path(output_tif_dir).glob("*.tif"))
+        for filename in filenames:
+            Path(filename).unlink()
     else:
         Path(output_tif_dir).mkdir()
     # write tifs
