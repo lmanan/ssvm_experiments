@@ -205,7 +205,7 @@ def track(
     for row in gt_data:
         id_, t_st, t_end, parent_id = int(row[0]), int(row[1]), int(row[2]), int(row[3])
 
-        for t in range(t_st, t_end - 1):
+        for t in range(t_st, t_end):
             groundtruth_graph.add_edge(
                 str(t) + "_" + str(id_), str(t + 1) + "_" + str(id_)
             )
