@@ -21,7 +21,7 @@ class HyperEdgeDistance(Costs):
         edge_variables = solver.get_variables(EdgeSelected)
         for key, index in edge_variables.items():
             if type(key[1]) is tuple:  # must be a hyper edge ...
-                solver.add_variable_cost(index, 0.0, self.constant)
+                solver.add_variable_cost(index, 0.0, self.weight)
                 solver.add_variable_cost(index, 0.0, self.constant)
             else:  # normal edge
                 u, v = cast("tuple[int, int]", key)
