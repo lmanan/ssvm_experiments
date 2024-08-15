@@ -16,12 +16,14 @@ import logging
 from saving_utils import save_result_tifs_res_track
 from pathlib import Path
 from run_traccuracy import compute_metrics
-from division_costs import HyperEdgeDistance, HyperSplit
+from division_costs import NormalEdgeDistance, HyperEdgeDistance
 from itertools import combinations
+import sys
+from datetime import date
 
 
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s %(name)s %(levelname)-8s %(message)s"
+    level=logging.DEBUG, format="%(asctime)s %(name)s %(levelname)-8s %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -59,16 +61,18 @@ def add_costs_and_constraints(solver, symmetric_division_cost):
 
     if symmetric_division_cost:
         solver.add_costs(
-            HyperEdgeDistance(
+            NormalEdgeDistance(
                 weight=1.0,
                 constant=-20.0,
                 position_attribute=NodeAttr.POS.value,
             ),
-            name="Position",
+            name="Normal Edge Distance",
         )
         solver.add_costs(
-            HyperSplit(weight=1.0, constant=0.0, position_attribute=NodeAttr.POS.value),
-            name="Division",
+            HyperEdgeDistance(
+                weight=1.0, constant=0.0, position_attribute=NodeAttr.POS.value
+            ),
+            name="Hyper Edge Distance",
         )
     else:
         solver.add_costs(
@@ -78,8 +82,9 @@ def add_costs_and_constraints(solver, symmetric_division_cost):
             name="Position",
         )
         solver.add_costs(Split(constant=0.5), name="Division")
-    solver.add_costs(Appear(constant=0.6))
-    solver.add_costs(Disappear(constant=0.6))
+
+    solver.add_costs(Appear(constant=0.6, ignore_attribute="ignore_appear_cost"))
+    solver.add_costs(Disappear(constant=0.6, ignore_attribute="ignore_disappear_cost"))
     return solver
 
 
@@ -131,6 +136,9 @@ def track(
         This leads to a slightly different set of constraints.
         Additionally, the cost for division is different.
     """
+
+    today = date.today()
+    sys.stdout = open(val_segmentation_dir_name + "_" + str(today), "w")
     # Step 1 ------------------------------
 
     # obtain train masks
@@ -272,6 +280,8 @@ def track(
     solver = add_costs_and_constraints(solver, symmetric_division_cost)
     solver.weights.from_ndarray(optimal_weights.to_ndarray())
 
+    # save weights to a json
+
     solution = solver.solve(verbose=True)
     solution_graph = solver.get_selected_subgraph(solution)
 
@@ -282,6 +292,7 @@ def track(
     )
     print("Computing scores ...")
     compute_metrics(val_segmentation_dir_name=val_segmentation_dir_name)
+    sys.stdout.close()
 
 
 if __name__ == "__main__":
