@@ -2,12 +2,18 @@ from tqdm import tqdm
 from pathlib import Path
 import tifffile
 import numpy as np
+import networkx as nx
 
 
-def save_result_tifs_res_track(solution_nx_graph, segmentation, output_tif_dir):
+def save_result_tifs_json(
+    solution_nx_graph: nx.DiGraph, segmentation: np.ndarray, output_tif_dir: str
+):
+
     tracked_masks = np.zeros_like(segmentation)
     new_mapping = {}  # <t_id> in segmentation mask: id in tracking mask
-    res_track = {}  # id in tracking mask: t_start, t_end, parent_id in tracking mask
+    res_track = (
+        {}
+    )  # id in tracking mask: ([t0, t1, ..., tN], parent_id) in tracking mask
     id_counter = 1
     for in_node, out_node in tqdm(solution_nx_graph.edges()):
         t_in, id_in = in_node.split("_")
@@ -18,9 +24,10 @@ def save_result_tifs_res_track(solution_nx_graph, segmentation, output_tif_dir):
         if num_out_edges == 1:
             if in_node in new_mapping.keys():
                 # i.e. continuation of an existing edge
-                res_track[new_mapping[in_node]][
-                    1
-                ] = t_out  # update the end time for this tracklet
+                if t_out not in res_track[new_mapping[in_node]][0]:
+                    res_track[new_mapping[in_node]][0].append(
+                        t_out
+                    )  # include the end time for this tracklet
                 tracked_masks[t_in][segmentation[t_in] == id_in] = new_mapping[in_node]
                 new_mapping[out_node] = new_mapping[in_node]
                 tracked_masks[t_out][segmentation[t_out] == id_out] = new_mapping[
@@ -28,7 +35,7 @@ def save_result_tifs_res_track(solution_nx_graph, segmentation, output_tif_dir):
                 ]
             else:
                 # i.e. start of a new edge
-                res_track[id_counter] = [t_in, t_out, 0]
+                res_track[id_counter] = ([t_in, t_out], 0)
                 new_mapping[in_node] = id_counter
                 new_mapping[out_node] = id_counter
                 tracked_masks[t_in][segmentation[t_in] == id_in] = id_counter
@@ -44,36 +51,33 @@ def save_result_tifs_res_track(solution_nx_graph, segmentation, output_tif_dir):
             t_out2, id_out2 = int(t_out2), int(id_out2)
             if in_node in new_mapping.keys():
                 # i.e. in node was connected by one outgoing edge previously
-                res_track[new_mapping[in_node]][1] = t_in
+                if t_in not in res_track[new_mapping[in_node]][0]:
+                    res_track[new_mapping[in_node]][0].append(t_in)
                 tracked_masks[t_in][segmentation[t_in] == id_in] = new_mapping[in_node]
                 if out_node1 not in new_mapping:
                     new_mapping[out_node1] = id_counter
                     tracked_masks[t_out1][segmentation[t_out1] == id_out1] = id_counter
-                    res_track[id_counter] = [t_out1, t_out1, new_mapping[in_node]]
+                    res_track[id_counter] = ([t_out1], new_mapping[in_node])
                     id_counter += 1
                 if out_node2 not in new_mapping:
                     new_mapping[out_node2] = id_counter
                     tracked_masks[t_out2][segmentation[t_out2] == id_out2] = id_counter
-                    res_track[id_counter] = [t_out2, t_out2, new_mapping[in_node]]
+                    res_track[id_counter] = ([t_out2], new_mapping[in_node])
                     id_counter += 1
             else:
-                res_track[id_counter] = [
-                    t_in,
-                    t_in,
-                    0,
-                ]  # since it divides immediately after
+                res_track[id_counter][0] = ([t_in], 0)
                 new_mapping[in_node] = id_counter
                 tracked_masks[t_in][segmentation[t_in] == id_in] = id_counter
                 id_counter += 1
                 if out_node1 not in new_mapping:
                     new_mapping[out_node1] = id_counter
                     tracked_masks[t_out1][segmentation[t_out1] == id_out1] = id_counter
-                    res_track[id_counter] = [t_out1, t_out1, new_mapping[in_node]]
+                    res_track[id_counter] = ([t_out1], new_mapping[in_node])
                     id_counter += 1
                 if out_node2 not in new_mapping:
                     new_mapping[out_node2] = id_counter
                     tracked_masks[t_out2][segmentation[t_out2] == id_out2] = id_counter
-                    res_track[id_counter] = [t_out2, t_out2, new_mapping[in_node]]
+                    res_track[id_counter] = ([t_out2], new_mapping[in_node])
                     id_counter += 1
 
     # in case there are edges that start and end at the same node, we do a
@@ -84,7 +88,7 @@ def save_result_tifs_res_track(solution_nx_graph, segmentation, output_tif_dir):
         if node in new_mapping.keys():
             pass
         else:
-            res_track[id_counter] = [t, t, 0]
+            res_track[id_counter] = ([t], 0)
             new_mapping[node] = id_counter
 
             tracked_masks[t][segmentation[t] == id_node] = id_counter
@@ -103,13 +107,10 @@ def save_result_tifs_res_track(solution_nx_graph, segmentation, output_tif_dir):
             Path(output_tif_dir) / ("mask" + str(i).zfill(3) + ".tif"),
             tracked_masks[i].astype(np.uint16),
         )
-    # write res_track.txt
-    res_track_list = []
-    for key in res_track.keys():
-        res_track_list.append(
-            [key, res_track[key][0], res_track[key][1], res_track[key][2]]
-        )
-    np.savetxt(
-        Path(output_tif_dir) / ("res_track.txt"), np.asarray(res_track_list), fmt="%i"
-    )
+    # write man_track.json
+    import json
+
+    with open(output_tif_dir + "/man_track.json", "w") as fp:
+        json.dump(res_track, fp)
+
     return new_mapping, res_track, tracked_masks
