@@ -3,6 +3,7 @@ from pathlib import Path
 import tifffile
 import numpy as np
 import networkx as nx
+import json
 
 
 def save_result_tifs_json(
@@ -108,8 +109,6 @@ def save_result_tifs_json(
             tracked_masks[i].astype(np.uint16),
         )
     # write man_track.json
-    import json
-
     with open(output_tif_dir + "/man_track.json", "w") as fp:
         json.dump(res_track, fp)
 

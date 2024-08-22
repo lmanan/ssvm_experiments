@@ -4,6 +4,7 @@ from traccuracy.matchers import CTCMatcher
 from traccuracy.metrics import CTCMetrics, DivisionMetrics
 import pprint
 import argparse
+import json
 
 pp = pprint.PrettyPrinter(indent=4)
 
@@ -28,7 +29,6 @@ def compute_metrics(
         metrics=[CTCMetrics(), DivisionMetrics()],
     )
     pp.pprint(ctc_results)
-    import json
 
     with open(results_dir + "/results.json", "w") as fp:
         json.dump(ctc_results, fp)

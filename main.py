@@ -13,18 +13,15 @@ from motile.variables import EdgeSelected
 from motile.track_graph import TrackGraph
 from motile.solver import Solver
 from motile.constraints import MaxParents, MaxChildren
-from motile.costs import Costs, Weight, Appear, Disappear, Split, EdgeDistance
+from motile.costs import Costs, Weight, Appear, Disappear, Split
 import logging
 from pathlib import Path
-from division_costs import (
-    NormalEdgeDistance,
-    HyperEdgeDistance,
-)
+from division_costs import EdgeDistance
 from itertools import combinations
 import json
 import networkx as nx
-from run_traccuracy_skip_edge import compute_metrics
-from saving_utils_skip_edge import save_result_tifs_json
+from run_traccuracy import compute_metrics
+from saving_utils import save_result_tifs_json
 import os
 
 logging.basicConfig(
@@ -33,7 +30,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-class NormalTimeGap(Costs):
+class TimeGap(Costs):
     def __init__(
         self,
         time_attribute: str | tuple[str, ...],
@@ -48,38 +45,6 @@ class NormalTimeGap(Costs):
         edge_variables = solver.get_variables(EdgeSelected)
         for key, index in edge_variables.items():
             if type(key[1]) is tuple:  # hyper edge
-                solver.add_variable_cost(index, 0.0, self.weight)
-                solver.add_variable_cost(index, 0.0, self.constant)
-            else:
-                u, v = cast("tuple[int, int]", key)
-                time_u = self.__get_node_frame(solver.graph, u)
-                time_v = self.__get_node_frame(solver.graph, v)
-                feature = np.linalg.norm(time_u - time_v)
-                solver.add_variable_cost(index, feature, self.weight)
-                solver.add_variable_cost(index, 1.0, self.constant)
-
-    def __get_node_frame(self, graph: nx.DiGraph, node: int) -> np.ndarray:
-        if isinstance(self.time_attribute, tuple):
-            return np.array([graph.nodes[node][p] for p in self.time_attribute])
-        else:
-            return np.array(graph.nodes[node][self.time_attribute])
-
-
-class HyperTimeGap(Costs):
-    def __init__(
-        self,
-        time_attribute: str | tuple[str, ...],
-        weight: float = 1.0,
-        constant: float = 0.0,
-    ) -> None:
-        self.time_attribute = time_attribute
-        self.weight = Weight(weight)
-        self.constant = Weight(constant)
-
-    def apply(self, solver: Solver) -> None:
-        edge_variables = solver.get_variables(EdgeSelected)
-        for key, index in edge_variables.items():
-            if type(key[1]) is tuple:
                 (start,) = key[0]
                 end1, end2 = key[1]
                 time_start = self.__get_node_frame(solver.graph, start)
@@ -89,8 +54,12 @@ class HyperTimeGap(Costs):
                 solver.add_variable_cost(index, feature, self.weight)
                 solver.add_variable_cost(index, 1.0, self.constant)
             else:
-                solver.add_variable_cost(index, 0.0, self.weight)
-                solver.add_variable_cost(index, 0.0, self.constant)
+                u, v = cast("tuple[int, int]", key)
+                time_u = self.__get_node_frame(solver.graph, u)
+                time_v = self.__get_node_frame(solver.graph, v)
+                feature = np.linalg.norm(time_u - time_v)
+                solver.add_variable_cost(index, feature, self.weight)
+                solver.add_variable_cost(index, 1.0, self.constant)
 
     def __get_node_frame(self, graph: nx.DiGraph, node: int) -> np.ndarray:
         if isinstance(self.time_attribute, tuple):
@@ -128,39 +97,28 @@ def add_costs_and_constraints(solver, symmetric_division_cost):
 
     if symmetric_division_cost:
         solver.add_costs(
-            NormalEdgeDistance(
+            EdgeDistance(
                 weight=1.0,
                 constant=-20.0,
                 position_attribute=NodeAttr.POS.value,
             ),
-            name="Normal Edge Distance",
-        )
-        solver.add_costs(
-            HyperEdgeDistance(
-                weight=1.0, constant=0.0, position_attribute=NodeAttr.POS.value
-            ),
-            name="Hyper Edge Distance",
+            name="Edge Distance",
         )
 
         solver.add_costs(
-            NormalTimeGap(weight=1.0, constant=0.0, time_attribute=NodeAttr.TIME.value),
-            name="Normal Time Gap",
-        )
-
-        solver.add_costs(
-            HyperTimeGap(weight=1.0, constant=0.0, time_attribute=NodeAttr.TIME.value),
-            name="Hyper Time Gap",
+            TimeGap(weight=1.0, constant=0.0, time_attribute=NodeAttr.TIME.value),
+            name="Time Gap",
         )
     else:
         solver.add_costs(
             EdgeDistance(
                 weight=1.0, constant=-20.0, position_attribute=NodeAttr.POS.value
             ),
-            name="Position",
+            name="Edge Distance",
         )
         solver.add_costs(
-            NormalTimeGap(weight=1.0, constant=0.0, time_attribute=NodeAttr.TIME.value),
-            name="Normal Time Gap",
+            TimeGap(weight=1.0, constant=0.0, time_attribute=NodeAttr.TIME.value),
+            name="Time Gap",
         )
         solver.add_costs(Split(constant=0.5), name="Division")
 
@@ -232,6 +190,7 @@ def track(
     train_segmentation = train_segmentation[
         :, np.newaxis
     ]  # requires a hypothesis channel
+    train_segmentation_short = train_segmentation[:46]
 
     # obtain val masks
     val_filenames = natsorted(list(Path(val_segmentation_dir_name).glob("*.tif")))
@@ -244,7 +203,7 @@ def track(
 
     # get train candidate graph
     train_candidate_graph, _ = get_candidate_graph(
-        segmentation=train_segmentation,
+        segmentation=train_segmentation_short,  # TODO
         max_edge_distance=max_edge_distance,
         iou=False,
         dT=dT,
@@ -399,12 +358,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "--train_segmentation_dir_name",
         dest="train_segmentation_dir_name",
-        default="./Fluo-N2DL-HeLa/02_GT0.0/",
+        default="./Fluo-N2DL-HeLa/02_GT0.05/",
     )
     parser.add_argument(
         "--val_segmentation_dir_name",
         dest="val_segmentation_dir_name",
-        default="./Fluo-N2DL-HeLa/01_GT0.0/",
+        default="./Fluo-N2DL-HeLa/01_GT0.05/",
     )
     parser.add_argument(
         "--max_edge_distance", dest="max_edge_distance", type=float, default=50
