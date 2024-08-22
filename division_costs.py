@@ -57,10 +57,10 @@ class AreaSplit(Costs):
                 solver.add_variable_cost(index, feature, self.weight)
                 solver.add_variable_cost(index, 1.0, self.constant)
             else:  # normal edge
-                u, v = cast("tuple[int, int]", key)
-                pos_u = self.__get_node_area(solver.graph, u)
-                pos_v = self.__get_node_area(solver.graph, v)
-                feature = np.linalg.norm(pos_u - pos_v)
+                start, end = cast("tuple[int, int]", key)
+                area_start = self.__get_node_area(solver.graph, start)
+                area_end = self.__get_node_area(solver.graph, end)
+                feature = np.linalg.norm(area_start - area_end)
                 solver.add_variable_cost(index, feature, self.weight)
                 solver.add_variable_cost(index, 1.0, self.constant)
 
