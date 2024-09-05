@@ -66,7 +66,7 @@ def save_result_tifs_json(
                     res_track[id_counter] = ([t_out2], new_mapping[in_node])
                     id_counter += 1
             else:
-                res_track[id_counter][0] = ([t_in], 0)
+                res_track[id_counter] = ([t_in], 0)
                 new_mapping[in_node] = id_counter
                 tracked_masks[t_in][segmentation[t_in] == id_in] = id_counter
                 id_counter += 1
