@@ -14,7 +14,8 @@ Download and uncompress the data from the v0.0.1 [release](https://github.com/lm
 conda create -n motile_ssvm python==3.10 
 conda activate motile_ssvm
 conda install -c conda-forge -c funkelab -c gurobi ilpy
-pip install git+https://github.com/funkelab/motile_toolbox.git
+pip install -e git+https://github.com/lmanan/motile_toolbox.git
+pip install -e git+https://github.com/lmanan/traccuracy.git
 pip install natsort imagecodecs
 conda install scip==9.0.0
 ```
