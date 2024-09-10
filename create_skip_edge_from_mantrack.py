@@ -77,15 +77,15 @@ if __name__ == "__main__":
     parser.add_argument(
         "--groundtruth_segmentation_dir_name",
         dest="groundtruth_segmentation_dir_name",
-        default="Fluo-N2DL-HeLa/02_GT/TRA",
+        default="Fluo-N2DH-SIM/01_GT/TRA",
     )
     parser.add_argument(
         "--groundtruth_daughter_parent_file_name",
         dest="groundtruth_daughter_parent_file_name",
-        default="Fluo-N2DL-HeLa/02_GT/TRA/man_track.txt",
+        default="Fluo-N2DH-SIM/01_GT/TRA/man_track.txt",
     )
     parser.add_argument(
-        "--dropout_fraction", dest="dropout_fraction", type=float, default=0.05
+        "--dropout_fraction", dest="dropout_fraction", type=float, default=0.00
     )
     args = parser.parse_args()
     create_new_groundtruth(
