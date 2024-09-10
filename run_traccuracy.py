@@ -12,15 +12,15 @@ pp = pprint.PrettyPrinter(indent=4)
 def compute_metrics(
     gt_json_file_name,
     gt_segmentation,
-    pred_json_file_name,
-    pred_segmentation,
-    results_dir,
+    predicted_json_file_name,
+    predicted_segmentation,
+    results_dir_name,
 ):
     gt_data = load_deepcell_data(
         masks=gt_segmentation, json_file_name=gt_json_file_name, name="gt"
     )
     pred_data = load_deepcell_data(
-        masks=pred_segmentation, json_file_name=pred_json_file_name, name="pred"
+        masks=predicted_segmentation, json_file_name=predicted_json_file_name, name="pred"
     )
     ctc_results = run_metrics(
         gt_data=gt_data,
@@ -30,7 +30,7 @@ def compute_metrics(
     )
     pp.pprint(ctc_results)
 
-    with open(results_dir + "/results.json", "w") as fp:
+    with open(results_dir_name + "/jsons/results.json", "w") as fp:
         json.dump(ctc_results, fp)
 
 
