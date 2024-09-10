@@ -6,8 +6,8 @@ import networkx as nx
 import json
 
 
-def save_result_tifs_json(
-    solution_nx_graph: nx.DiGraph, segmentation: np.ndarray, output_tif_dir: str
+def save_result(
+    solution_nx_graph: nx.DiGraph, segmentation: np.ndarray, output_tif_dir_name: str
 ):
 
     tracked_masks = np.zeros_like(segmentation)
@@ -96,20 +96,20 @@ def save_result_tifs_json(
             id_counter += 1
 
     # ensure that path where tifs will be saved, exists.
-    if Path(output_tif_dir).exists():
-        filenames = list(Path(output_tif_dir).glob("*.tif"))
+    if Path(output_tif_dir_name).exists():
+        filenames = list(Path(output_tif_dir_name).glob("*.tif"))
         for filename in filenames:
             Path(filename).unlink()
     else:
-        Path(output_tif_dir).mkdir()
+        Path(output_tif_dir_name).mkdir()
     # write tifs
     for i in range(tracked_masks.shape[0]):
         tifffile.imwrite(
-            Path(output_tif_dir) / ("mask" + str(i).zfill(3) + ".tif"),
+            Path(output_tif_dir_name) / ("mask" + str(i).zfill(3) + ".tif"),
             tracked_masks[i].astype(np.uint16),
         )
     # write man_track.json
-    with open(output_tif_dir + "/man_track.json", "w") as fp:
-        json.dump(res_track, fp)
+    with open(output_tif_dir_name + "/jsons/res_track.json", "w") as f:
+        json.dump(res_track, f)
 
     return new_mapping, res_track, tracked_masks
