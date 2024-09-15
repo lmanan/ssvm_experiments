@@ -21,23 +21,28 @@ def compute_metrics(
     predicted_json_file_name: str | None = None,
 ):
 
-    if gt_nx_graph is not None and pred_nx_graph is not None:
-        print("Using nx graphs ...")
+    if gt_nx_graph is not None:
+        print("Using gt nx graphs ...")
         gt_data = load_graph_masks(G=gt_nx_graph, masks=gt_segmentation, name="gt")
-        pred_data = load_graph_masks(
-            G=pred_nx_graph, masks=predicted_segmentation, name="pred"
-        )
-
-    elif gt_json_file_name is not None and predicted_json_file_name is not None:
-        print("Using json files ...")
+    elif gt_json_file_name is not None:
+        print("Using gt json files ...")
         gt_data = load_deepcell_data(
             masks=gt_segmentation, json_file_name=gt_json_file_name, name="gt"
         )
+
+    if pred_nx_graph is not None:
+        print("Using val nx graphs ...")
+        pred_data = load_graph_masks(
+            G=pred_nx_graph, masks=predicted_segmentation, name="pred"
+        )
+    elif predicted_json_file_name is not None:
+        print("Using val json files ...")
         pred_data = load_deepcell_data(
             masks=predicted_segmentation,
             json_file_name=predicted_json_file_name,
             name="pred",
         )
+
     print("Running CTC metrics now ...")
     ctc_results = run_metrics(
         gt_data=gt_data,
