@@ -44,6 +44,7 @@ def track(
     max_edge_distance: float | None,
     val_image_shape: tuple,
     pin_nodes: bool,
+    write_tifs: bool = False,
     train_node_embedding_file_name: str | None = None,
     val_node_embedding_file_name: str | None = None,
     train_edge_embedding_file_name: str | None = None,
@@ -234,6 +235,7 @@ def track(
         solution_nx_graph=graph_to_nx(solution_graph),
         segmentation=val_segmentation,
         output_tif_dir_name=results_dir_name,
+        write_tifs=write_tifs,
     )
 
     print("Computing scores ...")
@@ -341,6 +343,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--val_image_shape", dest="val_image_shape", nargs="+", type=int
     )
+    parser.add_argument("--write_tifs", dest="write_tifs", type=bool, default=False)
     print("+" * 10)
     args = parser.parse_args()
     pp.pprint(args)
@@ -368,4 +371,5 @@ if __name__ == "__main__":
         regularizer_weight=args.regularizer_weight,
         val_image_shape=args.val_image_shape,
         pin_nodes=args.pin_nodes,
+        write_tifs=args.write_tifs,
     )
