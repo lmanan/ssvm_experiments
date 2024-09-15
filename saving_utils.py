@@ -234,7 +234,6 @@ def save_result(
         elif len(pos) == 3:
             z, y, x = pos
             G.add_node(k, seg_id=v, time=t, z=z, y=y, x=x)
-            print(f"node {k} mapped to {v} at pos {pos} and time {t}")
     for edge in solution_nx_graph.edges:
         u, v = edge
         G.add_edge(u, v)
