@@ -6,7 +6,7 @@ from itertools import combinations
 import numpy as np
 import json
 import motile
-from motile.constraints import MaxParents, MaxChildren
+from motile.constraints import MaxParents, MaxChildren, Pin
 from motile.costs import Appear, Disappear
 from costs import (
     EdgeDistance,
@@ -183,9 +183,11 @@ def add_costs(
     return solver
 
 
-def add_constraints(solver: motile.Solver):
+def add_constraints(solver: motile.Solver, pin_nodes: bool):
     solver.add_constraints(MaxParents(1))
     solver.add_constraints(MaxChildren(1))
+    if pin_nodes:
+        solver.add_constraints(Pin(attribute=NodeAttr.PINNED.value))
     return solver
 
 
