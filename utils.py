@@ -118,26 +118,30 @@ def add_gt_edges_to_graph(groundtruth_graph: nx.DiGraph, json_file_name: str):
 
 def add_gt_edges_to_graph_2(groundtruth_graph: nx.DiGraph, gt_data: np.ndarray):
     """gt data will have last column as parent id column."""
-    parent_daughter_dictionary = {}
+    parent_daughter_dictionary = {}  # parent_id : list of daughter ids
+    id_time_dictionary = {}  # id_: time it shows up
     for row in gt_data:
         id_, t, parent_id = int(row[0]), int(row[1]), int(row[-1])
-        if row[-1] == -1:
+        if parent_id <= 0:  # new track starts
             pass
         else:
             if parent_id in parent_daughter_dictionary:
                 parent_daughter_dictionary[parent_id].append(id_)
             else:
                 parent_daughter_dictionary[parent_id] = [id_]
+    for row in gt_data:
+        id_, t, parent_id = int(row[0]), int(row[1]), int(row[-1])
+        id_time_dictionary[id_] = t
 
     for row in gt_data:
         id_, t, parent_id = int(row[0]), int(row[1]), int(row[-1])
-        if parent_id != -1:
+        if parent_id > 0:
+            parent_time = id_time_dictionary[parent_id]
+            start_node = str(parent_time) + "_" + str(parent_id)
             if len(parent_daughter_dictionary[parent_id]) == 1:
-                start_node = str(t - 1) + "_" + str(parent_id)
                 end_node = str(t) + "_" + str(id_)
                 groundtruth_graph.add_edge(start_node, end_node)
             elif len(parent_daughter_dictionary[parent_id]) == 2:
-                start_node = str(t - 1) + "_" + str(parent_id)
                 temporary_node = start_node
                 for daughter_node in parent_daughter_dictionary[parent_id]:
                     temporary_node += "_" + str(t) + "_" + str(daughter_node)
@@ -192,11 +196,26 @@ def add_constraints(solver: motile.Solver, pin_nodes: bool):
 
 
 def expand_position(data: np.ndarray, position: List, id_: int, nhood: int = 2):
+    outside = True
     if len(position) == 2:
         y, x = position
+        y, x = int(y), int(x)
+        while outside:
+            data_ = data[y - nhood : y + nhood + 1, x - nhood : x + nhood + 1]
+            if 0 in data_.shape:
+                nhood += 1
+            else:
+                outside = False
         data[y - nhood : y + nhood + 1, x - nhood : x + nhood + 1] = id_
     elif len(position) == 3:
         z, y, x = position
+        z, y, x = int(z), int(y), int(x)
+        while outside:
+            data_ = data[y - nhood : y + nhood + 1, x - nhood : x + nhood + 1]
+            if 0 in data_.shape:
+                nhood += 1
+            else:
+                outside = False
         data[
             z - nhood : z + nhood + 1,
             y - nhood : y + nhood + 1,
