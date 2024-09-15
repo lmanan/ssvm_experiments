@@ -12,7 +12,7 @@ def save_result(
     solution_nx_graph: nx.DiGraph,
     segmentation: np.ndarray,
     output_tif_dir_name: str,
-    write_tifs: bool,
+    write_tifs: bool = False,
 ):
     tracked_masks = np.zeros(segmentation.shape, dtype=np.uint16)
     new_mapping = {}  # <t_id> in segmentation mask: id in tracking mask

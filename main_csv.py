@@ -62,8 +62,6 @@ def track(
     train_array = load_csv_data(csv_file_name=train_csv_file_name)
     val_array = load_csv_data(csv_file_name=val_csv_file_name)
 
-    # just considering 100 time points (0-99) for now
-    # val_array = val_array[:7773, :]
     val_t_min = int(np.min(val_array[:, 1]))
     val_t_max = int(np.max(val_array[:, 1]))
     print(f"Min time point is {val_t_min}, Max time point is {val_t_max}")
@@ -87,6 +85,10 @@ def track(
         num_nearest_neighbours=num_nearest_neighbours,
         direction_candidate_graph=direction_candidate_graph,
         dT=dT,
+    )
+
+    print(
+        f"Number of nodes in val graph is {len(val_candidate_graph_initial.nodes)} and edges is {len(val_candidate_graph_initial.edges)}"
     )
 
     if direction_candidate_graph == "backward":
@@ -194,19 +196,23 @@ def track(
         node_embedding_exists=node_embedding_exists,
         edge_embedding_exists=edge_embedding_exists,
     )
-    solver = add_constraints(solver=solver, pin_nodes = pin_nodes)
+    solver = add_constraints(solver=solver, pin_nodes=pin_nodes)
     solver.weights.from_ndarray(ssvm_weights_array)
 
     solution = solver.solve(verbose=True)
     solution_graph = solver.get_selected_subgraph(solution)
 
+    print("+" * 10)
     print(
         f"After optimization, we selected {len(solution_graph.nodes)} nodes and {len(solution_graph.edges)} edges"
     )
+    print("+" * 10)
 
     # since val_segmentation is not available, as csvs are available.
 
-    val_segmentation = np.zeros((val_num_frames, *tuple(val_image_shape)), dtype=np.int64)  # TODO
+    val_segmentation = np.zeros(
+        (val_num_frames, *tuple(val_image_shape)), dtype=np.int64
+    )  # TODO
     for node, attrs in val_candidate_graph_initial.nodes.items():
         t, id_ = node.split("_")
         t, id_ = int(t), int(id_)
@@ -220,7 +226,6 @@ def track(
         solution_nx_graph=graph_to_nx(solution_graph),
         segmentation=val_segmentation,
         output_tif_dir_name=results_dir_name,
-        write_tifs=False,
     )
 
     print("Computing scores ...")
@@ -325,7 +330,9 @@ if __name__ == "__main__":
     )
 
     parser.add_argument("--pin_nodes", dest="pin_nodes", type=bool)
-    parser.add_argument("--val_image_shape", dest="val_image_shape", nargs="+", type=int) 
+    parser.add_argument(
+        "--val_image_shape", dest="val_image_shape", nargs="+", type=int
+    )
     print("+" * 10)
     args = parser.parse_args()
     pp.pprint(args)
@@ -351,6 +358,6 @@ if __name__ == "__main__":
         train_edge_embedding_file_name=args.train_edge_embedding_file_name,
         val_edge_embedding_file_name=args.val_edge_embedding_file_name,
         regularizer_weight=args.regularizer_weight,
-        val_image_shape = args.val_image_shape,
-        pin_nodes = args.pin_nodes
+        val_image_shape=args.val_image_shape,
+        pin_nodes=args.pin_nodes,
     )
