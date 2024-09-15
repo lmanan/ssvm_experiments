@@ -220,7 +220,7 @@ def track(
     # since val_segmentation is not available, as csvs are available.
 
     val_segmentation = np.zeros(
-        (val_num_frames, *tuple(val_image_shape)), dtype=np.int64
+        (val_t_max+1, *tuple(val_image_shape)), dtype=np.int64
     )
     for node, attrs in val_candidate_graph_initial.nodes.items():
         t, id_ = node.split("_")
