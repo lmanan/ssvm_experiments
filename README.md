@@ -17,7 +17,7 @@ conda install -c conda-forge -c funkelab -c gurobi ilpy
 pip install -e git+https://github.com/lmanan/motile.git
 pip install -e git+https://github.com/lmanan/motile_toolbox.git
 pip install -e git+https://github.com/lmanan/traccuracy.git
-pip install natsort imagecodecs
+pip install natsort imagecodecs jsonargparse
 conda install scip==9.0.0
 ```
 
