@@ -211,7 +211,11 @@ def expand_position(data: np.ndarray, position: List, id_: int, nhood: int = 2):
         z, y, x = position
         z, y, x = int(z), int(y), int(x)
         while outside:
-            data_ = data[y - nhood : y + nhood + 1, x - nhood : x + nhood + 1]
+            data_ = data[
+                z - nhood : z + nhood + 1,
+                y - nhood : y + nhood + 1,
+                x - nhood : x + nhood + 1,
+            ]
             if 0 in data_.shape:
                 nhood += 1
             else:
