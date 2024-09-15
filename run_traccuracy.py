@@ -1,27 +1,44 @@
 from traccuracy import run_metrics
-from traccuracy.loaders import load_deepcell_data
+from traccuracy.loaders import load_graph_masks, load_deepcell_data
 from traccuracy.matchers import CTCMatcher
 from traccuracy.metrics import CTCMetrics, DivisionMetrics
 import pprint
 import argparse
 import json
+import numpy as np
+import networkx as nx
 
 pp = pprint.PrettyPrinter(indent=4)
 
 
 def compute_metrics(
-    gt_json_file_name,
-    gt_segmentation,
-    predicted_json_file_name,
-    predicted_segmentation,
-    results_dir_name,
+    gt_segmentation: np.ndarray,
+    predicted_segmentation: np.ndarray,
+    results_dir_name: str,
+    gt_nx_graph: nx.DiGraph | None = None,
+    pred_nx_graph: nx.DiGraph | None = None,
+    gt_json_file_name: str | None = None,
+    predicted_json_file_name: str | None = None,
 ):
-    gt_data = load_deepcell_data(
-        masks=gt_segmentation, json_file_name=gt_json_file_name, name="gt"
-    )
-    pred_data = load_deepcell_data(
-        masks=predicted_segmentation, json_file_name=predicted_json_file_name, name="pred"
-    )
+
+    if gt_nx_graph is not None and pred_nx_graph is not None:
+        print("Using nx graphs ...")
+        gt_data = load_graph_masks(G=gt_nx_graph, masks=gt_segmentation, name="gt")
+        pred_data = load_graph_masks(
+            G=pred_nx_graph, masks=predicted_segmentation, name="pred"
+        )
+
+    elif gt_json_file_name is not None and predicted_json_file_name is not None:
+        print("Using json files ...")
+        gt_data = load_deepcell_data(
+            masks=gt_segmentation, json_file_name=gt_json_file_name, name="gt"
+        )
+        pred_data = load_deepcell_data(
+            masks=predicted_segmentation,
+            json_file_name=predicted_json_file_name,
+            name="pred",
+        )
+    print("Running CTC metrics now ...")
     ctc_results = run_metrics(
         gt_data=gt_data,
         pred_data=pred_data,
