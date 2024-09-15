@@ -222,3 +222,28 @@ def expand_position(data: np.ndarray, position: List, id_: int, nhood: int = 2):
             x - nhood : x + nhood + 1,
         ] = id_
     return data
+
+
+def add_app_disapp_attributes(track_graph: motile.TrackGraph, t_min, t_max):
+    num_nodes_previous = {}
+    num_nodes_next = {}
+    num_nodes_current = {}
+    for t in range(t_min, t_max + 1):
+        if t == t_min:
+            num_nodes_previous[t_min] = 0
+        else:
+            num_nodes_previous[t] = len(track_graph.nodes_by_frame(t - 1))
+
+        if t == t_max:
+            num_nodes_next[t_max] = 0
+        else:
+            num_nodes_next[t] = len(track_graph.nodes_by_frame(t + 1))
+        num_nodes_current[t] = len(track_graph.nodes_by_frame(t))
+
+    for node, attrs in track_graph.nodes.items():
+        time = attrs[NodeAttr.TIME.value]
+        if num_nodes_previous[time] == 0 and num_nodes_current[time] != 0:
+            track_graph.nodes[node][NodeAttr.IGNORE_APPEAR_COST.value] = True
+        if num_nodes_next[time] == 0 and num_nodes_current[time] != 0:
+            track_graph.nodes[node][NodeAttr.IGNORE_DISAPPEAR_COST.value] = True
+    return track_graph

@@ -7,6 +7,7 @@ from utils import (
     add_costs,
     add_constraints,
     expand_position,
+    add_app_disapp_attributes,
 )
 from motile_toolbox.candidate_graph import (
     get_candidate_graph_from_points_list,
@@ -62,9 +63,15 @@ def track(
     train_array = load_csv_data(csv_file_name=train_csv_file_name)
     val_array = load_csv_data(csv_file_name=val_csv_file_name)
 
+    train_t_min = int(np.min(train_array[:, 1]))
+    train_t_max = int(np.max(train_array[:, 1]))
+    print(
+        f"Min train time point is {train_t_min}, Max train time point is {train_t_max}"
+    )
+
     val_t_min = int(np.min(val_array[:, 1]))
     val_t_max = int(np.max(val_array[:, 1]))
-    print(f"Min time point is {val_t_min}, Max time point is {val_t_max}")
+    print(f"Min val time point is {val_t_min}, Max val time point is {val_t_max}")
     val_num_frames = val_t_max - val_t_min + 1
 
     print(
@@ -87,10 +94,6 @@ def track(
         dT=dT,
     )
 
-    print(
-        f"Number of nodes in val graph is {len(val_candidate_graph_initial.nodes)} and edges is {len(val_candidate_graph_initial.edges)}"
-    )
-
     if direction_candidate_graph == "backward":
         train_candidate_graph_initial = flip_edges(train_candidate_graph_initial)
         val_candidate_graph_initial = flip_edges(val_candidate_graph_initial)
@@ -106,6 +109,11 @@ def track(
         nx_graph=train_candidate_graph, frame_attribute="time"
     )
     val_track_graph = TrackGraph(nx_graph=val_candidate_graph, frame_attribute="time")
+
+    train_track_graph = add_app_disapp_attributes(
+        train_track_graph, train_t_min, train_t_max
+    )
+    val_track_graph = add_app_disapp_attributes(val_track_graph, val_t_min, val_t_max)
 
     print(
         f"Number of nodes in train graph is {len(train_track_graph.nodes)} and edges is {len(train_track_graph.edges)}"
@@ -212,7 +220,7 @@ def track(
 
     val_segmentation = np.zeros(
         (val_num_frames, *tuple(val_image_shape)), dtype=np.int64
-    )  # TODO
+    )
     for node, attrs in val_candidate_graph_initial.nodes.items():
         t, id_ = node.split("_")
         t, id_ = int(t), int(id_)
