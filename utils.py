@@ -195,35 +195,48 @@ def add_constraints(solver: motile.Solver, pin_nodes: bool):
     return solver
 
 
-def expand_position(data: np.ndarray, position: List, id_: int, nhood: int = 2):
+def expand_position(
+    data: np.ndarray,
+    position: List,
+    id_: int,
+    nhood: int = 2,
+):
     outside = True
     if len(position) == 2:
+        H, W = data.shape
         y, x = position
         y, x = int(y), int(x)
         while outside:
-            data_ = data[y - nhood : y + nhood + 1, x - nhood : x + nhood + 1]
-            if 0 in data_.shape:
-                nhood += 1
-            else:
-                outside = False
-        data[y - nhood : y + nhood + 1, x - nhood : x + nhood + 1] = id_
-    elif len(position) == 3:
-        z, y, x = position
-        z, y, x = int(z), int(y), int(x)
-        while outside:
             data_ = data[
-                z - nhood : z + nhood + 1,
-                y - nhood : y + nhood + 1,
-                x - nhood : x + nhood + 1,
+                np.maximum(y - nhood, 0) : np.minimum(y + nhood + 1, H),
+                np.maximum(x - nhood, 0) : np.minimum(x + nhood + 1, W),
             ]
             if 0 in data_.shape:
                 nhood += 1
             else:
                 outside = False
         data[
-            z - nhood : z + nhood + 1,
-            y - nhood : y + nhood + 1,
-            x - nhood : x + nhood + 1,
+            np.maximum(y - nhood, 0) : np.minimum(y + nhood + 1, H),
+            np.maximum(x - nhood, 0) : np.minimum(x + nhood + 1, W),
+        ] = id_
+    elif len(position) == 3:
+        D, H, W = data.shape
+        z, y, x = position
+        z, y, x = int(z), int(y), int(x)
+        while outside:
+            data_ = data[
+                np.maximum(z - nhood, 0) : np.minimum(z + nhood + 1, D),
+                np.maximum(y - nhood, 0) : np.minimum(y + nhood + 1, H),
+                np.maximum(x - nhood, 0) : np.minimum(x + nhood + 1, W),
+            ]
+            if 0 in data_.shape:
+                nhood += 1
+            else:
+                outside = False
+        data[
+            np.maximum(z - nhood, 0) : np.minimum(z + nhood + 1, D),
+            np.maximum(y - nhood, 0) : np.minimum(y + nhood + 1, H),
+            np.maximum(x - nhood, 0) : np.minimum(x + nhood + 1, W),
         ] = id_
     return data
 
