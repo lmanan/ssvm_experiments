@@ -73,7 +73,6 @@ def track(
     val_t_min = int(np.min(val_array[:, 1]))
     val_t_max = int(np.max(val_array[:, 1]))
     print(f"Min val time point is {val_t_min}, Max val time point is {val_t_max}")
-    val_num_frames = val_t_max - val_t_min + 1
 
     print(
         f"train array has shape {train_array.shape}, val array has shape {val_array.shape}"
@@ -220,8 +219,9 @@ def track(
     # since val_segmentation is not available, as csvs are available.
 
     val_segmentation = np.zeros(
-        (val_t_max+1, *tuple(val_image_shape)), dtype=np.int64
+        (val_t_max + 1, *tuple(val_image_shape)), dtype=np.int64
     )
+
     for node, attrs in val_candidate_graph_initial.nodes.items():
         t, id_ = node.split("_")
         t, id_ = int(t), int(id_)
@@ -248,6 +248,9 @@ def track(
 
     # convert to track graph
     val_gt_track_graph = TrackGraph(nx_graph=val_gt_graph, frame_attribute="time")
+    print(
+        f"Number of nodes in the test imaging dataset is {len(val_gt_track_graph.nodes)} and edges is {len(val_gt_track_graph.edges)}"
+    )
 
     for node in val_gt_track_graph.nodes:
         pos = val_gt_track_graph.nodes[node]["pos"]
@@ -353,6 +356,10 @@ if __name__ == "__main__":
         pass
     else:
         os.makedirs(args.results_dir_name + "/jsons/")
+
+    parser.save(
+        args, args.results_dir_name + "/jsons/args.json", format="json", overwrite=True
+    )
 
     track(
         train_segmentation_dir_name=args.train_segmentation_dir_name,
