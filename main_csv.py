@@ -23,10 +23,8 @@ from run_traccuracy import compute_metrics
 import json
 import logging
 import networkx as nx
-
 import sys
 
-sys.setrecursionlimit(1500)
 
 logging.basicConfig(
     level=logging.DEBUG, format="%(asctime)s %(name)s %(levelname)-8s %(message)s"
@@ -125,6 +123,22 @@ def track(
     print(
         f"Number of nodes in val graph is {len(val_track_graph.nodes)} and edges is {len(val_track_graph.edges)}"
     )
+
+    max_out_edges = 0
+    max_in_edges = 0
+    for node in train_candidate_graph.nodes:
+        num_next = len(train_candidate_graph.out_edges(node))
+        if num_next > max_out_edges:
+            max_out_edges = num_next
+
+        num_prev = len(train_candidate_graph.in_edges(node))
+        if num_prev > max_in_edges:
+            max_in_edges = num_prev
+
+    print(f"max out edges is {max_out_edges}")
+    print(f"max in edges {max_in_edges}")
+
+    sys.setrecursionlimit(np.maximum(max_in_edges, max_out_edges) + 100)
 
     # ++++++++
     # Step 2 - build `gt` graph
