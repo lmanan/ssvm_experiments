@@ -24,6 +24,10 @@ import json
 import logging
 import networkx as nx
 
+import sys
+
+sys.setrecursionlimit(1500)
+
 logging.basicConfig(
     level=logging.DEBUG, format="%(asctime)s %(name)s %(levelname)-8s %(message)s"
 )
@@ -378,5 +382,6 @@ if __name__ == "__main__":
         regularizer_weight=args.regularizer_weight,
         val_image_shape=args.val_image_shape,
         pin_nodes=args.pin_nodes,
+        # ssvm_weights_array = np.array([0.16659477, -2.2797666, -0.0, 0.10000018, -0.0,  2.2797666]),
         write_tifs=args.write_tifs,
     )
