@@ -14,7 +14,7 @@ from costs import (
     EdgeEmbeddingDistance,
     TimeGap,
 )
-from motile_toolbox.candidate_graph import NodeAttr
+from motile_toolbox.candidate_graph import NodeAttr, EdgeAttr
 from typing import List
 
 
@@ -156,13 +156,17 @@ def add_gt_edges_to_graph_2(groundtruth_graph: nx.DiGraph, gt_data: np.ndarray):
 def add_costs(
     solver: motile.Solver,
     dT: int,
+    use_edge_distance: bool,
     node_embedding_exists: bool,
     edge_embedding_exists: bool,
 ):
-    solver.add_costs(
-        EdgeDistance(weight=1.0, constant=-20.0, position_attribute=NodeAttr.POS.value),
-        name="Edge Distance",
-    )
+    if use_edge_distance:
+        solver.add_costs(
+            EdgeDistance(
+                weight=1.0, constant=-20.0, position_attribute=NodeAttr.POS.value
+            ),
+            name="Edge Distance",
+        )
     if dT > 1:
         solver.add_costs(
             TimeGap(weight=1.0, constant=0.0, time_attribute=NodeAttr.TIME.value),
@@ -171,14 +175,18 @@ def add_costs(
     if node_embedding_exists:
         solver.add_costs(
             NodeEmbeddingDistance(
-                node_embedding_attribute="node embedding", weight=1.0, constant=-0.5
+                node_embedding_attribute=NodeAttr.NODE_EMBEDDING.value,
+                weight=1.0,
+                constant=-0.5,
             ),
             name="A.E. Embedding Distance",
         )
     if edge_embedding_exists:
         solver.add_costs(
             EdgeEmbeddingDistance(
-                edge_embedding_attribute="edge_embedding", weight=-1.0, constant=0.5
+                edge_embedding_attribute=EdgeAttr.EDGE_EMBEDDING.value,
+                weight=-1.0,
+                constant=0.5,
             ),
             name="Attrackt Affinity",
         )
