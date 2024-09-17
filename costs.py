@@ -2,7 +2,6 @@ from motile.costs import Costs, Weight
 from motile.variables import EdgeSelected
 from motile.solver import Solver
 import networkx as nx
-from scipy.spatial import distance
 import numpy as np
 from typing import cast
 
@@ -86,8 +85,8 @@ class NodeEmbeddingDistance(Costs):
                 embedding_start = self.__get_node_embedding(solver.graph, start)
                 embedding_end1 = self.__get_node_embedding(solver.graph, end1)
                 embedding_end2 = self.__get_node_embedding(solver.graph, end2)
-                feature = distance.cosine(
-                    embedding_start, 0.5 * (embedding_end1 + embedding_end2)
+                feature = np.linalg.norm(
+                    embedding_start - 0.5 * (embedding_end1 + embedding_end2)
                 )
                 solver.add_variable_cost(index, feature, self.weight)
                 solver.add_variable_cost(index, 1.0, self.constant)
@@ -95,7 +94,7 @@ class NodeEmbeddingDistance(Costs):
                 u, v = cast("tuple[int, int]", key)
                 embedding_u = self.__get_node_embedding(solver.graph, u)
                 embedding_v = self.__get_node_embedding(solver.graph, v)
-                feature = distance.cosine(embedding_u, embedding_v)
+                feature = np.linalg.norm(embedding_u - embedding_v)
                 solver.add_variable_cost(index, feature, self.weight)
                 solver.add_variable_cost(index, 1.0, self.constant)
 
