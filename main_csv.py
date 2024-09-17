@@ -46,6 +46,7 @@ def track(
     max_edge_distance: float | None,
     val_image_shape: tuple,
     pin_nodes: bool,
+    use_edge_distance: bool,
     write_tifs: bool = False,
     train_node_embedding_file_name: str | None = None,
     val_node_embedding_file_name: str | None = None,
@@ -100,6 +101,27 @@ def track(
         train_candidate_graph_initial = flip_edges(train_candidate_graph_initial)
         val_candidate_graph_initial = flip_edges(val_candidate_graph_initial)
 
+    # add train_node_embedding
+    if train_node_embedding_file_name is not None:
+        print("Adding train node embedding ...")
+        train_embedding_data = np.loadtxt(train_node_embedding_file_name, delimiter=" ")
+        for row in train_embedding_data:
+            id_, t = int(row[0]), int(row[1])
+            node_id = str(t) + "_" + str(id_)
+            train_candidate_graph_initial.nodes[node_id][
+                NodeAttr.NODE_EMBEDDING.value
+            ] = row[2:]
+
+    if val_node_embedding_file_name is not None:
+        print("Adding val node embedding ...")
+        val_embedding_data = np.loadtxt(val_node_embedding_file_name, delimiter=" ")
+        for row in val_embedding_data:
+            id_, t = int(row[0]), int(row[1])
+            node_id = str(t) + "_" + str(id_)
+            val_candidate_graph_initial.nodes[node_id][
+                NodeAttr.NODE_EMBEDDING.value
+            ] = row[2:]
+
     # add hyper edges
     train_candidate_graph = add_hyper_edges(
         candidate_graph=train_candidate_graph_initial
@@ -137,8 +159,9 @@ def track(
 
     print(f"max out edges is {max_out_edges}")
     print(f"max in edges {max_in_edges}")
-
-    sys.setrecursionlimit(np.maximum(max_in_edges, max_out_edges) + 100)
+    temp_limit = np.maximum(max_in_edges, max_out_edges) + 500
+    if temp_limit > 1000:
+        sys.setrecursionlimit(temp_limit)
 
     # ++++++++
     # Step 2 - build `gt` graph
@@ -185,6 +208,7 @@ def track(
         solver = add_costs(
             solver=solver,
             dT=dT,
+            use_edge_distance=use_edge_distance,
             node_embedding_exists=node_embedding_exists,
             edge_embedding_exists=edge_embedding_exists,
         )
@@ -219,6 +243,7 @@ def track(
     solver = add_costs(
         solver=solver,
         dT=dT,
+        use_edge_distance=use_edge_distance,
         node_embedding_exists=node_embedding_exists,
         edge_embedding_exists=edge_embedding_exists,
     )
@@ -365,6 +390,9 @@ if __name__ == "__main__":
         "--val_image_shape", dest="val_image_shape", nargs="+", type=int
     )
     parser.add_argument("--write_tifs", dest="write_tifs", type=bool, default=False)
+    parser.add_argument(
+        "--use_edge_distance", dest="use_edge_distance", default=True, type=bool
+    )
     print("+" * 10)
     args = parser.parse_args()
     pp.pprint(args)
@@ -396,6 +424,7 @@ if __name__ == "__main__":
         regularizer_weight=args.regularizer_weight,
         val_image_shape=args.val_image_shape,
         pin_nodes=args.pin_nodes,
-        # ssvm_weights_array = np.array([0.16659477, -2.2797666, -0.0, 0.10000018, -0.0,  2.2797666]),
+        use_edge_distance=args.use_edge_distance,
+        # ssvm_weights_array = np.array([0.25073758, -3.5108733, 2.2920241, -3.5108733, -0.0, 1.3091136, -0.0,  3.7421033]),
         write_tifs=args.write_tifs,
     )
