@@ -207,7 +207,7 @@ def expand_position(
     data: np.ndarray,
     position: List,
     id_: int,
-    nhood: int = 2,
+    nhood: int = 1,
 ):
     outside = True
     if len(position) == 2:
