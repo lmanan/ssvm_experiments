@@ -45,9 +45,9 @@ def track(
     num_nearest_neighbours: int | None,
     max_edge_distance: float | None,
     val_image_shape: tuple,
-    pin_nodes: bool,
     use_edge_distance: bool,
     write_tifs: bool = False,
+    pin_nodes: bool = True,
     train_node_embedding_file_name: str | None = None,
     val_node_embedding_file_name: str | None = None,
     train_edge_embedding_file_name: str | None = None,
@@ -64,30 +64,32 @@ def track(
 
     print("\nBuilding train and val track graph ...\n")
 
-    train_array = load_csv_data(csv_file_name=train_csv_file_name)
+    if ssvm_weights_array is None:
+        train_array = load_csv_data(csv_file_name=train_csv_file_name)
+
+        print(f"Train array has shape {train_array.shape}.")
+        train_t_min = int(np.min(train_array[:, 1]))
+        train_t_max = int(np.max(train_array[:, 1]))
+
+        print(
+            f"Min train time point is {train_t_min}, Max train time point is {train_t_max}"
+        )
+
     val_array = load_csv_data(csv_file_name=val_csv_file_name)
 
-    train_t_min = int(np.min(train_array[:, 1]))
-    train_t_max = int(np.max(train_array[:, 1]))
-    print(
-        f"Min train time point is {train_t_min}, Max train time point is {train_t_max}"
-    )
-
+    print(f"Val array has shape {val_array.shape}.")
     val_t_min = int(np.min(val_array[:, 1]))
     val_t_max = int(np.max(val_array[:, 1]))
     print(f"Min val time point is {val_t_min}, Max val time point is {val_t_max}")
 
-    print(
-        f"train array has shape {train_array.shape}, val array has shape {val_array.shape}"
-    )
-
-    train_candidate_graph_initial = get_candidate_graph_from_points_list(
-        points_list=train_array,
-        max_edge_distance=max_edge_distance,
-        num_nearest_neighbours=num_nearest_neighbours,
-        direction_candidate_graph=direction_candidate_graph,
-        dT=dT,
-    )
+    if ssvm_weights_array is None:
+        train_candidate_graph_initial = get_candidate_graph_from_points_list(
+            points_list=train_array,
+            max_edge_distance=max_edge_distance,
+            num_nearest_neighbours=num_nearest_neighbours,
+            direction_candidate_graph=direction_candidate_graph,
+            dT=dT,
+        )
 
     val_candidate_graph_initial = get_candidate_graph_from_points_list(
         points_list=val_array,
@@ -98,19 +100,25 @@ def track(
     )
 
     if direction_candidate_graph == "backward":
-        train_candidate_graph_initial = flip_edges(train_candidate_graph_initial)
+        if ssvm_weights_array is None:
+            train_candidate_graph_initial = flip_edges(train_candidate_graph_initial)
         val_candidate_graph_initial = flip_edges(val_candidate_graph_initial)
 
     # add train_node_embedding
-    if train_node_embedding_file_name is not None:
-        print("Adding train node embedding ...")
-        train_embedding_data = np.loadtxt(train_node_embedding_file_name, delimiter=" ")
-        for row in train_embedding_data:
-            id_, t = int(row[0]), int(row[1])
-            node_id = str(t) + "_" + str(id_)
-            train_candidate_graph_initial.nodes[node_id][
-                NodeAttr.NODE_EMBEDDING.value
-            ] = row[2:]
+    if ssvm_weights_array is None:
+        if train_node_embedding_file_name is not None:
+            print("Adding train node embedding ...")
+            train_embedding_data = np.loadtxt(
+                train_node_embedding_file_name, delimiter=" "
+            )
+            for row in train_embedding_data:
+                id_, t = int(row[0]), int(row[1])
+                node_id = str(t) + "_" + str(id_)
+                train_candidate_graph_initial.nodes[node_id][
+                    NodeAttr.NODE_EMBEDDING.value
+                ] = row[
+                    2:
+                ]  # seg_id t ...
 
     if val_node_embedding_file_name is not None:
         print("Adding val node embedding ...")
@@ -120,66 +128,73 @@ def track(
             node_id = str(t) + "_" + str(id_)
             val_candidate_graph_initial.nodes[node_id][
                 NodeAttr.NODE_EMBEDDING.value
-            ] = row[2:]
+            ] = row[
+                2:
+            ]  # seg_id t ...
 
     # add hyper edges
-    train_candidate_graph = add_hyper_edges(
-        candidate_graph=train_candidate_graph_initial
-    )
+    if ssvm_weights_array is None:
+        train_candidate_graph = add_hyper_edges(
+            candidate_graph=train_candidate_graph_initial
+        )
     val_candidate_graph = add_hyper_edges(candidate_graph=val_candidate_graph_initial)
 
     # make track graph
-    train_track_graph = TrackGraph(
-        nx_graph=train_candidate_graph, frame_attribute="time"
-    )
-    val_track_graph = TrackGraph(nx_graph=val_candidate_graph, frame_attribute="time")
+    if ssvm_weights_array is None:
+        train_track_graph = TrackGraph(
+            nx_graph=train_candidate_graph, frame_attribute="time"
+        )
+        train_track_graph = add_app_disapp_attributes(
+            train_track_graph, train_t_min, train_t_max
+        )
 
-    train_track_graph = add_app_disapp_attributes(
-        train_track_graph, train_t_min, train_t_max
-    )
+        print(
+            f"Number of nodes in train graph is {len(train_track_graph.nodes)} and edges is {len(train_track_graph.edges)}"
+        )
+
+    val_track_graph = TrackGraph(nx_graph=val_candidate_graph, frame_attribute="time")
     val_track_graph = add_app_disapp_attributes(val_track_graph, val_t_min, val_t_max)
 
-    print(
-        f"Number of nodes in train graph is {len(train_track_graph.nodes)} and edges is {len(train_track_graph.edges)}"
-    )
     print(
         f"Number of nodes in val graph is {len(val_track_graph.nodes)} and edges is {len(val_track_graph.edges)}"
     )
 
-    max_out_edges = 0
-    max_in_edges = 0
-    for node in train_candidate_graph.nodes:
-        num_next = len(train_candidate_graph.out_edges(node))
-        if num_next > max_out_edges:
-            max_out_edges = num_next
+    if ssvm_weights_array is None:
+        max_out_edges = 0
+        max_in_edges = 0
+        for node in train_candidate_graph.nodes:
+            num_next = len(train_candidate_graph.out_edges(node))
+            if num_next > max_out_edges:
+                max_out_edges = num_next
 
-        num_prev = len(train_candidate_graph.in_edges(node))
-        if num_prev > max_in_edges:
-            max_in_edges = num_prev
+            num_prev = len(train_candidate_graph.in_edges(node))
+            if num_prev > max_in_edges:
+                max_in_edges = num_prev
 
-    print(f"max out edges is {max_out_edges}")
-    print(f"max in edges {max_in_edges}")
-    temp_limit = np.maximum(max_in_edges, max_out_edges) + 500
-    if temp_limit > 1000:
-        sys.setrecursionlimit(temp_limit)
+        print(f"Max out edges is {max_out_edges}.")
+        print(f"Max in edges {max_in_edges}.")
+        temp_limit = np.maximum(max_in_edges, max_out_edges) + 500
+        if temp_limit > 1000:
+            sys.setrecursionlimit(temp_limit)
 
     # ++++++++
     # Step 2 - build `gt` graph
     # ++++++++
-    print("\nBuilding GT track graph ...\n")
+    if ssvm_weights_array is None:
+        print("\nBuilding GT track graph ...\n")
 
-    groundtruth_graph = nx.DiGraph()
-    groundtruth_graph.add_nodes_from(train_candidate_graph_initial.nodes(data=True))
+        groundtruth_graph = nx.DiGraph()
+        groundtruth_graph.add_nodes_from(train_candidate_graph_initial.nodes(data=True))
 
-    # add edges
-    groundtruth_graph = add_gt_edges_to_graph_2(
-        groundtruth_graph=groundtruth_graph, gt_data=train_array
-    )
+        # add edges
+        groundtruth_graph = add_gt_edges_to_graph_2(
+            groundtruth_graph=groundtruth_graph, gt_data=train_array
+        )
 
-    # convert to track graph
-    groundtruth_track_graph = TrackGraph(
-        nx_graph=groundtruth_graph, frame_attribute="time"
-    )
+        # convert to track graph
+        groundtruth_track_graph = TrackGraph(
+            nx_graph=groundtruth_graph, frame_attribute="time"
+        )
 
     # ++++++++
     # Step 3 - fit weights on `groundtruth_track_graph`
@@ -262,7 +277,7 @@ def track(
     # since val_segmentation is not available, as csvs are available.
 
     val_segmentation = np.zeros(
-        (val_t_max + 1, *tuple(val_image_shape)), dtype=np.int64
+        (val_t_max + 1, *tuple(val_image_shape)), dtype=np.uint64
     )
 
     for node, attrs in val_candidate_graph_initial.nodes.items():
@@ -425,6 +440,5 @@ if __name__ == "__main__":
         val_image_shape=args.val_image_shape,
         pin_nodes=args.pin_nodes,
         use_edge_distance=args.use_edge_distance,
-        # ssvm_weights_array = np.array([0.25073758, -3.5108733, 2.2920241, -3.5108733, -0.0, 1.3091136, -0.0,  3.7421033]),
         write_tifs=args.write_tifs,
     )
