@@ -13,6 +13,7 @@ from motile_toolbox.candidate_graph import (
     get_candidate_graph_from_points_list,
     graph_to_nx,
     NodeAttr,
+    EdgeAttr,
 )
 from motile import TrackGraph, Solver
 import jsonargparse
@@ -108,10 +109,10 @@ def track(
     if ssvm_weights_array is None:
         if train_node_embedding_file_name is not None:
             print("Adding train node embedding ...")
-            train_embedding_data = np.loadtxt(
+            train_node_embedding_data = np.loadtxt(
                 train_node_embedding_file_name, delimiter=" "
             )
-            for row in train_embedding_data:
+            for row in train_node_embedding_data:
                 id_, t = int(row[0]), int(row[1])
                 node_id = str(t) + "_" + str(id_)
                 train_candidate_graph_initial.nodes[node_id][
@@ -119,6 +120,28 @@ def track(
                 ] = row[
                     2:
                 ]  # seg_id t ...
+
+        if train_edge_embedding_file_name is not None:
+            print("Adding train edge embedding ...")
+            train_edge_embedding_data = np.loadtxt(
+                train_edge_embedding_file_name, delimiter=" "
+            )
+            for row in train_edge_embedding_data:
+                id_a, t_a, id_b, t_b, weight = row
+                id_a, t_a, id_b, t_b, weight = (
+                    int(id_a),
+                    int(t_a),
+                    int(id_b),
+                    int(t_b),
+                    float(weight),
+                )
+                node_a = str(t_a) + "_" + str(id_a)
+                node_b = str(t_b) + "_" + str(id_b)
+                edge_id = (node_a, node_b)
+                if edge_id in train_candidate_graph_initial.edges:
+                    train_candidate_graph_initial.edges[edge_id][
+                        EdgeAttr.EDGE_EMBEDDING.value
+                    ] = weight
 
     if val_node_embedding_file_name is not None:
         print("Adding val node embedding ...")
@@ -131,6 +154,28 @@ def track(
             ] = row[
                 2:
             ]  # seg_id t ...
+
+    if val_edge_embedding_file_name is not None:
+        print("Adding val edge embedding ...")
+        val_edge_embedding_data = np.loadtxt(
+            val_edge_embedding_file_name, delimiter=" "
+        )
+        for row in val_edge_embedding_data:
+            id_a, t_a, id_b, t_b, weight = row
+            id_a, t_a, id_b, t_b, weight = (
+                int(id_a),
+                int(t_a),
+                int(id_b),
+                int(t_b),
+                float(weight),
+            )
+            node_a = str(t_a) + "_" + str(id_a)
+            node_b = str(t_b) + "_" + str(id_b)
+            edge_id = (node_a, node_b)
+            if edge_id in val_candidate_graph_initial.edges:
+                val_candidate_graph_initial.edges[edge_id][
+                    EdgeAttr.EDGE_EMBEDDING.value
+                ] = weight
 
     # add hyper edges
     if ssvm_weights_array is None:
@@ -279,7 +324,6 @@ def track(
     val_segmentation = np.zeros(
         (val_t_max + 1, *tuple(val_image_shape)), dtype=np.uint64
     )
-
     for node, attrs in val_candidate_graph_initial.nodes.items():
         t, id_ = node.split("_")
         t, id_ = int(t), int(id_)
