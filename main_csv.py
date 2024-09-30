@@ -36,8 +36,6 @@ pp = pprint.PrettyPrinter(indent=4)
 
 
 def track(
-    train_segmentation_dir_name: str | None,
-    val_segmentation_dir_name: str | None,
     train_csv_file_name: str | None,
     val_csv_file_name: str | None,
     direction_candidate_graph: str,
@@ -499,8 +497,6 @@ if __name__ == "__main__":
     )
 
     track(
-        train_segmentation_dir_name=args.train_segmentation_dir_name,
-        val_segmentation_dir_name=args.val_segmentation_dir_name,
         train_csv_file_name=args.train_csv_file_name,
         val_csv_file_name=args.val_csv_file_name,
         num_nearest_neighbours=args.num_nearest_neighbours,
