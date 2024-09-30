@@ -16,7 +16,7 @@ from motile_toolbox.candidate_graph import (
     EdgeAttr,
 )
 from motile import TrackGraph, Solver
-import jsonargparse
+from jsonargparse import ArgumentParser
 import pprint
 import os
 from saving_utils import save_result
@@ -25,7 +25,7 @@ import json
 import logging
 import networkx as nx
 import sys
-
+from yaml import load, Loader
 
 logging.basicConfig(
     level=logging.DEBUG, format="%(asctime)s %(name)s %(levelname)-8s %(message)s"
@@ -35,27 +35,44 @@ logger = logging.getLogger(__name__)
 pp = pprint.PrettyPrinter(indent=4)
 
 
-def track(
-    train_csv_file_name: str | None,
-    val_csv_file_name: str | None,
-    direction_candidate_graph: str,
-    results_dir_name: str,
-    dT: int,
-    num_nearest_neighbours: int | None,
-    max_edge_distance: float | None,
-    val_image_shape: tuple,
-    use_edge_distance: bool,
-    write_tifs: bool = False,
-    pin_nodes: bool = True,
-    train_node_embedding_file_name: str | None = None,
-    val_node_embedding_file_name: str | None = None,
-    train_edge_embedding_file_name: str | None = None,
-    val_edge_embedding_file_name: str | None = None,
-    ssvm_weights_array: np.ndarray | None = None,
-    regularizer_weight: float = 100.0,
-):
+def track(yaml_config_file_name: str):
+
+    with open(yaml_config_file_name) as stream:
+        args = load(stream, Loader=Loader)
+
+    print("+" * 10)
+    pp.pprint(args)
+    print("+" * 10)
+
+    train_csv_file_name = args["train_csv_file_name"]
+    val_csv_file_name = args["val_csv_file_name"]
+    num_nearest_neighbours = args["num_nearest_neighbours"]
+    max_edge_distance = args["max_edge_distance"]
+    direction_candidate_graph = args["direction_candidate_graph"]
+    dT = args["dT"]
+    train_node_embedding_file_name = args["train_node_embedding_file_name"]
+    val_node_embedding_file_name = args["val_node_embedding_file_name"]
+    train_edge_embedding_file_name = args["train_edge_embedding_file_name"]
+    val_edge_embedding_file_name = args["val_edge_embedding_file_name"]
+    regularizer_weight = args["regularizer_weight"]
+    val_image_shape = args["val_image_shape"]
+    pin_nodes = args["pin_nodes"]
+    use_edge_distance = args["use_edge_distance"]
+    write_tifs = args["write_tifs"]
+    ssvm_weights_array = args["ssvm_weights_array"]
+    results_dir_name = args["results_dir_name"]
 
     assert direction_candidate_graph in ["forward", "backward"]
+
+    print("Created jsons directory.")
+    if os.path.exists(results_dir_name + "/jsons/"):
+        pass
+    else:
+        os.makedirs(results_dir_name + "/jsons/")
+
+    print("Saved args in 'jsons/args.json' file.")
+    with open(results_dir_name + "/jsons/args.json", "w") as f:
+        json.dump(args, f)
 
     # ++++++++
     # Step 1 - build `train` and `val` candidate graphs
@@ -67,19 +84,21 @@ def track(
         train_array = load_csv_data(csv_file_name=train_csv_file_name)
 
         print(f"Train array has shape {train_array.shape}.")
+
         train_t_min = int(np.min(train_array[:, 1]))
         train_t_max = int(np.max(train_array[:, 1]))
 
         print(
-            f"Min train time point is {train_t_min}, Max train time point is {train_t_max}"
+            f"Min train time point is {train_t_min}, Max train time point is {train_t_max}."
         )
 
     val_array = load_csv_data(csv_file_name=val_csv_file_name)
 
     print(f"Val array has shape {val_array.shape}.")
+
     val_t_min = int(np.min(val_array[:, 1]))
     val_t_max = int(np.max(val_array[:, 1]))
-    print(f"Min val time point is {val_t_min}, Max val time point is {val_t_max}")
+    print(f"Min val time point is {val_t_min}, Max val time point is {val_t_max}.")
 
     if ssvm_weights_array is None:
         train_candidate_graph_initial = get_candidate_graph_from_points_list(
@@ -107,6 +126,7 @@ def track(
     if ssvm_weights_array is None:
         if train_node_embedding_file_name is not None:
             print("Adding train node embedding ...")
+
             train_node_embedding_data = np.loadtxt(
                 train_node_embedding_file_name, delimiter=" "
             )
@@ -121,6 +141,7 @@ def track(
 
         if train_edge_embedding_file_name is not None:
             print("Adding train edge embedding ...")
+
             train_edge_embedding_data = np.loadtxt(
                 train_edge_embedding_file_name, delimiter=" "
             )
@@ -143,6 +164,7 @@ def track(
 
     if val_node_embedding_file_name is not None:
         print("Adding val node embedding ...")
+
         val_embedding_data = np.loadtxt(val_node_embedding_file_name, delimiter=" ")
         for row in val_embedding_data:
             id_, t = int(row[0]), int(row[1])
@@ -192,14 +214,14 @@ def track(
         )
 
         print(
-            f"Number of nodes in train graph is {len(train_track_graph.nodes)} and edges is {len(train_track_graph.edges)}"
+            f"Number of nodes in train graph is {len(train_track_graph.nodes)} and edges is {len(train_track_graph.edges)}."
         )
 
     val_track_graph = TrackGraph(nx_graph=val_candidate_graph, frame_attribute="time")
     val_track_graph = add_app_disapp_attributes(val_track_graph, val_t_min, val_t_max)
 
     print(
-        f"Number of nodes in val graph is {len(val_track_graph.nodes)} and edges is {len(val_track_graph.edges)}"
+        f"Number of nodes in val graph is {len(val_track_graph.nodes)} and edges is {len(val_track_graph.edges)}."
     )
 
     if ssvm_weights_array is None:
@@ -214,8 +236,8 @@ def track(
             if num_prev > max_in_edges:
                 max_in_edges = num_prev
 
-        print(f"Max out edges is {max_out_edges}.")
-        print(f"Max in edges {max_in_edges}.")
+        print(f"Maximum number of out edges is {max_out_edges}.")
+        print(f"Maximum number of in edges {max_in_edges}.")
         temp_limit = np.maximum(max_in_edges, max_out_edges) + 500
         if temp_limit > 1000:
             sys.setrecursionlimit(temp_limit)
@@ -343,11 +365,9 @@ def track(
         fmt=["%i", "%i", "%i", "%i"],
     )
 
-    print("+" * 10)
     print(
-        f"After optimization, we selected {len(solution_graph.nodes)} nodes and {len(solution_graph.edges)} edges"
+        f"After optimization, we selected {len(solution_graph.nodes)} nodes and {len(solution_graph.edges)} edges."
     )
-    print("+" * 10)
 
     # since val_segmentation is not available, as csvs are available.
 
@@ -381,7 +401,7 @@ def track(
     # convert to track graph
     val_gt_track_graph = TrackGraph(nx_graph=val_gt_graph, frame_attribute="time")
     print(
-        f"Number of nodes in the test imaging dataset is {len(val_gt_track_graph.nodes)} and edges is {len(val_gt_track_graph.edges)}"
+        f"Number of nodes in the test imaging dataset is {len(val_gt_track_graph.nodes)} and edges is {len(val_gt_track_graph.edges)}."
     )
 
     for node in val_gt_track_graph.nodes:
@@ -406,111 +426,7 @@ def track(
 
 
 if __name__ == "__main__":
-    parser = jsonargparse.ArgumentParser()
-    parser.add_argument(
-        "--train_segmentation_dir_name",
-        dest="train_segmentation_dir_name",
-        type=str,
-        default=None,
-    )
-    parser.add_argument(
-        "--val_segmentation_dir_name",
-        dest="val_segmentation_dir_name",
-        type=str,
-        default=None,
-    )
-    parser.add_argument(
-        "--train_csv_file_name", dest="train_csv_file_name", type=str, default=None
-    )
-
-    parser.add_argument(
-        "--val_csv_file_name", dest="val_csv_file_name", type=str, default=None
-    )
-
-    parser.add_argument(
-        "--num_nearest_neighbours", dest="num_nearest_neighbours", type=int
-    )
-
-    parser.add_argument(
-        "--max_edge_distance", dest="max_edge_distance", default=None, type=float
-    )
-
-    parser.add_argument(
-        "--direction_candidate_graph",
-        dest="direction_candidate_graph",
-        default="backward",
-        type=str,
-    )
-    parser.add_argument("--dT", dest="dT", default=1, type=int)
-    parser.add_argument(
-        "--train_node_embedding_file_name",
-        dest="train_node_embedding_file_name",
-        default=None,
-        type=str,
-    )
-    parser.add_argument(
-        "--val_node_embedding_file_name",
-        dest="val_node_embedding_file_name",
-        default=None,
-        type=str,
-    )
-    parser.add_argument(
-        "--train_edge_embedding_file_name",
-        dest="train_edge_embedding_file_name",
-        default=None,
-        type=str,
-    )
-    parser.add_argument(
-        "--val_edge_embedding_file_name",
-        dest="val_edge_embedding_file_name",
-        default=None,
-        type=str,
-    )
-    parser.add_argument(
-        "--results_dir_name", dest="results_dir_name", default="results/", type=str
-    )
-
-    parser.add_argument(
-        "--regularizer_weight", dest="regularizer_weight", type=float, default=100.0
-    )
-
-    parser.add_argument("--pin_nodes", dest="pin_nodes", type=bool)
-    parser.add_argument(
-        "--val_image_shape", dest="val_image_shape", nargs="+", type=int
-    )
-    parser.add_argument("--write_tifs", dest="write_tifs", type=bool, default=False)
-    parser.add_argument(
-        "--use_edge_distance", dest="use_edge_distance", default=True, type=bool
-    )
-    print("+" * 10)
+    parser = ArgumentParser()
+    parser.add_argument("--yaml_config_file_name", dest="yaml_config_file_name")
     args = parser.parse_args()
-    pp.pprint(args)
-    print("+" * 10)
-
-    if os.path.exists(args.results_dir_name + "/jsons/"):
-        pass
-    else:
-        os.makedirs(args.results_dir_name + "/jsons/")
-
-    parser.save(
-        args, args.results_dir_name + "/jsons/args.json", format="json", overwrite=True
-    )
-
-    track(
-        train_csv_file_name=args.train_csv_file_name,
-        val_csv_file_name=args.val_csv_file_name,
-        num_nearest_neighbours=args.num_nearest_neighbours,
-        max_edge_distance=args.max_edge_distance,
-        results_dir_name=args.results_dir_name,
-        direction_candidate_graph=args.direction_candidate_graph,
-        dT=args.dT,
-        train_node_embedding_file_name=args.train_node_embedding_file_name,
-        val_node_embedding_file_name=args.val_node_embedding_file_name,
-        train_edge_embedding_file_name=args.train_edge_embedding_file_name,
-        val_edge_embedding_file_name=args.val_edge_embedding_file_name,
-        regularizer_weight=args.regularizer_weight,
-        val_image_shape=args.val_image_shape,
-        pin_nodes=args.pin_nodes,
-        use_edge_distance=args.use_edge_distance,
-        write_tifs=args.write_tifs,
-    )
+    track(yaml_config_file_name=args.yaml_config_file_name)
