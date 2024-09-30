@@ -313,6 +313,38 @@ def track(
     solution = solver.solve(verbose=True)
     solution_graph = solver.get_selected_subgraph(solution)
 
+    ilp_results_data = []
+    for edge in solution_graph.edges:
+        u, v = edge
+        if isinstance(u, tuple):
+            u = u[0]
+
+        t_u, id_u = u.split("_")
+        t_u, id_u = int(t_u), int(id_u)
+        if isinstance(v, tuple):
+            m, n = v
+
+            t_m, id_m = m.split("_")
+            t_m, id_m = int(t_m), int(id_m)
+
+            t_n, id_n = n.split("_")
+            t_n, id_n = int(t_n), int(id_n)
+
+            ilp_results_data.append([id_u, t_u, id_m, t_m])
+            ilp_results_data.append([id_u, t_u, id_n, t_n])
+        else:
+            t_v, id_v = v.split("_")
+            t_v, id_v = int(t_v), int(id_v)
+
+            ilp_results_data.append([id_u, t_u, id_v, t_v])
+
+    np.savetxt(
+        results_dir_name + "/jsons/ilp.csv",
+        np.asarray(ilp_results_data),
+        delimiter=" ",
+        fmt=["%i", "%i", "%i", "%i"],
+    )
+
     print("+" * 10)
     print(
         f"After optimization, we selected {len(solution_graph.nodes)} nodes and {len(solution_graph.edges)} edges"
