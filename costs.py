@@ -7,10 +7,19 @@ from typing import cast
 
 
 class EdgeDistance(Costs):
-    def __init__(self, position_attribute, weight, constant):
+    def __init__(
+        self,
+        position_attribute,
+        weight,
+        constant,
+        mean_edge_distance=None,
+        std_edge_distance=None,
+    ):
         self.position_attribute = position_attribute
         self.weight = Weight(weight)
         self.constant = Weight(constant)
+        self.mean_edge_distance = mean_edge_distance
+        self.std_edge_distance = std_edge_distance
 
     def apply(self, solver):
         edge_variables = solver.get_variables(EdgeSelected)
@@ -22,6 +31,13 @@ class EdgeDistance(Costs):
                 pos_end1 = self.__get_node_position(solver.graph, end1)
                 pos_end2 = self.__get_node_position(solver.graph, end2)
                 feature = np.linalg.norm(pos_start - 0.5 * (pos_end1 + pos_end2))
+                if (
+                    self.mean_edge_distance is not None
+                    and self.std_edge_distance is not None
+                ):
+                    feature = (feature - self.mean_edge_distance) / (
+                        self.std_edge_distance
+                    )
                 solver.add_variable_cost(index, feature, self.weight)
                 solver.add_variable_cost(index, 1.0, self.constant)
             else:  # normal edge
@@ -29,6 +45,13 @@ class EdgeDistance(Costs):
                 pos_u = self.__get_node_position(solver.graph, u)
                 pos_v = self.__get_node_position(solver.graph, v)
                 feature = np.linalg.norm(pos_u - pos_v)
+                if (
+                    self.mean_edge_distance is not None
+                    and self.std_edge_distance is not None
+                ):
+                    feature = (feature - self.mean_edge_distance) / (
+                        self.std_edge_distance
+                    )
                 solver.add_variable_cost(index, feature, self.weight)
                 solver.add_variable_cost(index, 1.0, self.constant)
 
@@ -40,10 +63,19 @@ class EdgeDistance(Costs):
 
 
 class EdgeEmbeddingDistance(Costs):
-    def __init__(self, edge_embedding_attribute, weight, constant):
+    def __init__(
+        self,
+        edge_embedding_attribute,
+        weight,
+        constant,
+        mean_edge_embedding_distance=None,
+        std_edge_embedding_distance=None,
+    ):
         self.edge_embedding_attribute = edge_embedding_attribute
         self.weight = Weight(weight)
         self.constant = Weight(constant)
+        self.mean_edge_embedding_distance = mean_edge_embedding_distance
+        self.std_edge_embedding_distance = std_edge_embedding_distance
 
     def apply(self, solver):
         edge_variables = solver.get_variables(EdgeSelected)
@@ -54,11 +86,25 @@ class EdgeEmbeddingDistance(Costs):
                 feature1 = self.__get_edge_embedding(solver.graph, start, end1)
                 feature2 = self.__get_edge_embedding(solver.graph, start, end2)
                 feature = 0.5 * (feature1 + feature2)
+                if (
+                    self.mean_edge_embedding_distance is not None
+                    and self.std_edge_embedding_distance is not None
+                ):
+                    feature = (feature - self.mean_edge_embedding_distance) / (
+                        self.std_edge_embedding_distance
+                    )
                 solver.add_variable_cost(index, feature, self.weight)
                 solver.add_variable_cost(index, 1.0, self.constant)
             else:
                 u, v = cast("tuple[int, int]", key)
                 feature = self.__get_edge_embedding(solver.graph, u, v)
+                if (
+                    self.mean_edge_embedding_distance is not None
+                    and self.std_edge_embedding_distance is not None
+                ):
+                    feature = (feature - self.mean_edge_embedding_distance) / (
+                        self.std_edge_embedding_distance
+                    )
                 solver.add_variable_cost(index, feature, self.weight)
                 solver.add_variable_cost(index, 1.0, self.constant)
 
@@ -67,14 +113,24 @@ class EdgeEmbeddingDistance(Costs):
         if self.edge_embedding_attribute in graph.edges[edge]:
             return np.array([graph.edges[edge][self.edge_embedding_attribute]])
         else:
-            return np.array([0.0])
+            print(f"Edge attribute not found for edge {edge}. Setting to 0.001")
+            return np.array([0.001])
 
 
 class NodeEmbeddingDistance(Costs):
-    def __init__(self, node_embedding_attribute, weight, constant):
+    def __init__(
+        self,
+        node_embedding_attribute,
+        weight,
+        constant,
+        mean_node_embedding_distance=None,
+        std_node_embedding_distance=None,
+    ):
         self.node_embedding_attribute = node_embedding_attribute
         self.weight = Weight(weight)
         self.constant = Weight(constant)
+        self.mean_node_embedding_distance = mean_node_embedding_distance
+        self.std_node_embedding_distance = std_node_embedding_distance
 
     def apply(self, solver):
         edge_variables = solver.get_variables(EdgeSelected)
@@ -88,6 +144,13 @@ class NodeEmbeddingDistance(Costs):
                 feature = np.linalg.norm(
                     embedding_start - 0.5 * (embedding_end1 + embedding_end2)
                 )
+                if (
+                    self.mean_node_embedding_distance is not None
+                    and self.std_node_embedding_distance is not None
+                ):
+                    feature = (feature - self.mean_node_embedding_distance) / (
+                        self.std_node_embedding_distance
+                    )
                 solver.add_variable_cost(index, feature, self.weight)
                 solver.add_variable_cost(index, 1.0, self.constant)
             else:  # normal edge
@@ -95,6 +158,13 @@ class NodeEmbeddingDistance(Costs):
                 embedding_u = self.__get_node_embedding(solver.graph, u)
                 embedding_v = self.__get_node_embedding(solver.graph, v)
                 feature = np.linalg.norm(embedding_u - embedding_v)
+                if (
+                    self.mean_node_embedding_distance is not None
+                    and self.std_node_embedding_distance is not None
+                ):
+                    feature = (feature - self.mean_node_embedding_distance) / (
+                        self.std_node_embedding_distance
+                    )
                 solver.add_variable_cost(index, feature, self.weight)
                 solver.add_variable_cost(index, 1.0, self.constant)
 
