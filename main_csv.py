@@ -61,6 +61,7 @@ def track(yaml_config_file_name: str):
     write_tifs = args["write_tifs"]
     ssvm_weights_array = args["ssvm_weights_array"]
     results_dir_name = args["results_dir_name"]
+    whitening = args["whitening"]
 
     assert direction_candidate_graph in ["forward", "backward"]
 
@@ -100,16 +101,25 @@ def track(yaml_config_file_name: str):
     val_t_max = int(np.max(val_array[:, 1]))
     print(f"Min val time point is {val_t_min}, Max val time point is {val_t_max}.")
 
-    if ssvm_weights_array is None:
-        train_candidate_graph_initial = get_candidate_graph_from_points_list(
-            points_list=train_array,
-            max_edge_distance=max_edge_distance,
-            num_nearest_neighbours=num_nearest_neighbours,
-            direction_candidate_graph=direction_candidate_graph,
-            dT=dT,
-        )
+    mean_edge_distance = std_edge_distance = None
+    mean_node_embedding_distance = std_node_embedding_distance = None
+    mean_edge_embedding_distance = std_edge_embedding_distance = None
 
-    val_candidate_graph_initial = get_candidate_graph_from_points_list(
+    if ssvm_weights_array is None:
+        train_candidate_graph_initial, mean_edge_distance, std_edge_distance = (
+            get_candidate_graph_from_points_list(
+                points_list=train_array,
+                max_edge_distance=max_edge_distance,
+                num_nearest_neighbours=num_nearest_neighbours,
+                direction_candidate_graph=direction_candidate_graph,
+                dT=dT,
+                whitening=whitening,
+            )
+        )
+        print(
+            f"Mean_edge_distance {mean_edge_distance} Std_edge_distance {std_edge_distance}."
+        )
+    val_candidate_graph_initial, _, _ = get_candidate_graph_from_points_list(
         points_list=val_array,
         max_edge_distance=max_edge_distance,
         num_nearest_neighbours=num_nearest_neighbours,
@@ -139,6 +149,23 @@ def track(yaml_config_file_name: str):
                     2:
                 ]  # seg_id t ...
 
+            if whitening:
+                node_embedding_distance_list = []
+                for edge_id in train_candidate_graph_initial.edges:
+                    u, v = edge_id
+                    node_embedding_u = train_candidate_graph_initial.nodes[u][
+                        NodeAttr.NODE_EMBEDDING.value
+                    ]
+                    node_embedding_v = train_candidate_graph_initial.nodes[v][
+                        NodeAttr.NODE_EMBEDDING.value
+                    ]
+                    d = np.linalg.norm(node_embedding_u - node_embedding_v)
+                    node_embedding_distance_list.append(d)
+                mean_node_embedding_distance = np.mean(node_embedding_distance_list)
+                std_node_embedding_distance = np.std(node_embedding_distance_list)
+                print(
+                    f"Mean_node_embedding_distance {mean_node_embedding_distance}, Std_node_embedding_distance {std_node_embedding_distance}."
+                )
         if train_edge_embedding_file_name is not None:
             print("Adding train edge embedding ...")
 
@@ -161,6 +188,23 @@ def track(yaml_config_file_name: str):
                     train_candidate_graph_initial.edges[edge_id][
                         EdgeAttr.EDGE_EMBEDDING.value
                     ] = weight
+            if whitening:
+                edge_embedding_distance_list = []
+                for edge_id in train_candidate_graph_initial.edges:
+                    if (
+                        EdgeAttr.EDGE_EMBEDDING.value
+                        in train_candidate_graph_initial.edges[edge_id]
+                    ):
+                        edge_embedding_distance_list.append(
+                            train_candidate_graph_initial.edges[edge_id][
+                                EdgeAttr.EDGE_EMBEDDING.value
+                            ]
+                        )
+                mean_edge_embedding_distance = np.mean(edge_embedding_distance_list)
+                std_edge_embedding_distance = np.std(edge_embedding_distance_list)
+                print(
+                    f"Mean edge embedding distance {mean_edge_embedding_distance} std edge embedding distance {std_edge_embedding_distance}."
+                )
 
     if val_node_embedding_file_name is not None:
         print("Adding val node embedding ...")
@@ -291,6 +335,12 @@ def track(yaml_config_file_name: str):
             use_edge_distance=use_edge_distance,
             node_embedding_exists=node_embedding_exists,
             edge_embedding_exists=edge_embedding_exists,
+            mean_edge_distance=mean_edge_distance,
+            std_edge_distance=std_edge_distance,
+            mean_node_embedding_distance=mean_node_embedding_distance,
+            std_node_embedding_distance=std_node_embedding_distance,
+            mean_edge_embedding_distance=mean_edge_embedding_distance,
+            std_edge_embedding_distance=std_edge_embedding_distance,
         )
         solver = add_constraints(solver=solver, pin_nodes=pin_nodes)
         solver.fit_weights(
@@ -326,6 +376,12 @@ def track(yaml_config_file_name: str):
         use_edge_distance=use_edge_distance,
         node_embedding_exists=node_embedding_exists,
         edge_embedding_exists=edge_embedding_exists,
+        mean_edge_distance=mean_edge_distance,
+        std_edge_distance=std_edge_distance,
+        mean_node_embedding_distance=mean_node_embedding_distance,
+        std_node_embedding_distance=std_node_embedding_distance,
+        mean_edge_embedding_distance=mean_edge_embedding_distance,
+        std_edge_embedding_distance=std_edge_embedding_distance,
     )
     solver = add_constraints(solver=solver, pin_nodes=pin_nodes)
     solver.weights.from_ndarray(ssvm_weights_array)
@@ -334,8 +390,8 @@ def track(yaml_config_file_name: str):
     solution_graph = solver.get_selected_subgraph(solution)
 
     ilp_results_data = []
-    for edge in solution_graph.edges:
-        u, v = edge
+    for edge_id in solution_graph.edges:
+        u, v = edge_id
         if isinstance(u, tuple):
             u = u[0]
 
