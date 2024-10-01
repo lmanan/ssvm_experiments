@@ -159,11 +159,21 @@ def add_costs(
     use_edge_distance: bool,
     node_embedding_exists: bool,
     edge_embedding_exists: bool,
+    mean_edge_distance: float = None,
+    std_edge_distance: float = None,
+    mean_node_embedding_distance: float = None,
+    std_node_embedding_distance: float = None,
+    mean_edge_embedding_distance: float = None,
+    std_edge_embedding_distance: float = None,
 ):
     if use_edge_distance:
         solver.add_costs(
             EdgeDistance(
-                weight=1.0, constant=-20.0, position_attribute=NodeAttr.POS.value
+                weight=1.0,
+                constant=-20.0,
+                position_attribute=NodeAttr.POS.value,
+                mean_edge_distance=mean_edge_distance,
+                std_edge_distance=std_edge_distance,
             ),
             name="Edge Distance",
         )
@@ -178,6 +188,8 @@ def add_costs(
                 node_embedding_attribute=NodeAttr.NODE_EMBEDDING.value,
                 weight=1.0,
                 constant=-0.5,
+                mean_node_embedding_distance=mean_node_embedding_distance,
+                std_node_embedding_distance=std_node_embedding_distance,
             ),
             name="A.E. Embedding Distance",
         )
@@ -187,6 +199,8 @@ def add_costs(
                 edge_embedding_attribute=EdgeAttr.EDGE_EMBEDDING.value,
                 weight=-1.0,
                 constant=0.5,
+                mean_edge_embedding_distance=mean_edge_embedding_distance,
+                std_edge_embedding_distance=std_edge_embedding_distance,
             ),
             name="Attrackt Affinity",
         )
