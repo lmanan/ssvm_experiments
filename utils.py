@@ -14,8 +14,67 @@ from costs import (
     EdgeEmbeddingDistance,
     TimeGap,
 )
+from motile.track_graph import TrackGraph
 from motile_toolbox.candidate_graph import NodeAttr, EdgeAttr
 from typing import List
+
+
+def set_feature_mask_app_disapp(
+    ground_truth: np.ndarray, mask: np.ndarray, track_graph: TrackGraph
+):
+    """get_feature_mask_app_disapp.
+    Given correct ground truth and mask, this figures out which node appearance
+    features and disappearance features should be zeroed out and hence not
+    considered.
+
+    Here, if `feature_mask_app` is set to 1 for a node, that means that node feature should
+    be zeroed out.
+    Similarly, if `feature_mask_disapp` is set to 1 for a node, that means that
+    nod feature should be zeroed out.
+
+    Parameters
+    ----------
+    ground_truth : np.ndarray
+        ground_truth is numpy array (N,) where N is the number of variables.
+        It has been annotated 1 if variable is there and 0 if variable isn't
+        there.
+    mask : np.ndarray
+        mask is numpy array (N,) where N is the number of variables. It has
+        been annotated 1 if variable was annotated and 0 if variable was not
+        annotated.
+    track_graph: TrackGraph
+    """
+    gt_attribute = "gt"
+    for node in track_graph.nodes:
+        previous_edges_gt = 0
+        next_edges_gt = 0
+        for edge in track_graph.prev_edges[node]:
+            if gt_attribute in track_graph.edges[edge]:
+                if track_graph.edges[edge][gt_attribute] == 1:
+                    previous_edges_gt += 1
+        for edge in track_graph.next_edges[node]:
+            if gt_attribute in track_graph.edges[edge]:
+                if track_graph.edges[edge][gt_attribute] == 1:
+                    next_edges_gt += 1
+
+        if previous_edges_gt > 0 and next_edges_gt > 0:
+            track_graph.nodes[NodeAttr.FEATURE_MASK_APPEAR] = 0
+            track_graph.nodes[NodeAttr.FEATURE_MASK_DISAPPEAR] = 0
+        elif previous_edges_gt > 0 and next_edges_gt == 0:
+            track_graph.nodes[NodeAttr.FEATURE_MASK_APPEAR] = 0
+            track_graph.nodes[NodeAttr.FEATURE_MASK_DISAPPEAR] = (
+                1  # since we don't know if the track ended at this node, so this feature should be masked
+            )
+        elif previous_edges_gt == 0 and next_edges_gt > 0:
+            track_graph.nodes[NodeAttr.FEATURE_MASK_APPEAR] = (
+                1  # since we don't know for sure if the track started at this node, so this feature should be masked.
+            )
+            track_graph.nodes[NodeAttr.FEATURE_MASK_DISAPPEAR] = 0
+        elif previous_edges_gt == 0 and next_edges_gt == 0:
+            track_graph.nodes[NodeAttr.FEATURE_MASK_APPEAR] = (
+                1  # since we don't know for sure if the track started at this node, so this feature should be masked.
+            )
+            track_graph.nodes[NodeAttr.FEATURE_MASK_DISAPPEAR] = 1
 
 
 def load_tif_data(segmentation_dir_name: str, add_channel_axis=True):
