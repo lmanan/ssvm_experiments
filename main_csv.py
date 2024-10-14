@@ -117,7 +117,7 @@ def track(yaml_config_file_name: str):
             )
         )
         print(
-            f"Mean_edge_distance {mean_edge_distance} Std_edge_distance {std_edge_distance}."
+            f"Mean edge_distance {mean_edge_distance} Std edge_distance {std_edge_distance}."
         )
     val_candidate_graph_initial, _, _ = get_candidate_graph_from_points_list(
         points_list=val_array,
@@ -131,6 +131,13 @@ def track(yaml_config_file_name: str):
         if ssvm_weights_array is None:
             train_candidate_graph_initial = flip_edges(train_candidate_graph_initial)
         val_candidate_graph_initial = flip_edges(val_candidate_graph_initial)
+
+    print(
+        f"Number of nodes in train candidate graph initial is {len(train_candidate_graph_initial.nodes)} and edges is {len(train_candidate_graph_initial.edges)}"
+    )
+    print(
+        f"Number of nodes in val candidate graph initial is {len(val_candidate_graph_initial.nodes)} and edges is {len(val_candidate_graph_initial.edges)}"
+    )
 
     # add train_node_embedding
     if ssvm_weights_array is None:
@@ -164,7 +171,7 @@ def track(yaml_config_file_name: str):
                 mean_node_embedding_distance = np.mean(node_embedding_distance_list)
                 std_node_embedding_distance = np.std(node_embedding_distance_list)
                 print(
-                    f"Mean_node_embedding_distance {mean_node_embedding_distance}, Std_node_embedding_distance {std_node_embedding_distance}."
+                    f"Mean node_embedding_distance {mean_node_embedding_distance}, Std node_embedding_distance {std_node_embedding_distance}."
                 )
         if train_edge_embedding_file_name is not None:
             print("Adding train edge embedding ...")
@@ -203,7 +210,7 @@ def track(yaml_config_file_name: str):
                 mean_edge_embedding_distance = np.mean(edge_embedding_distance_list)
                 std_edge_embedding_distance = np.std(edge_embedding_distance_list)
                 print(
-                    f"Mean edge embedding distance {mean_edge_embedding_distance} std edge embedding distance {std_edge_embedding_distance}."
+                    f"Mean edge embedding distance {mean_edge_embedding_distance} Std edge embedding distance {std_edge_embedding_distance}."
                 )
 
     if val_node_embedding_file_name is not None:
@@ -258,14 +265,14 @@ def track(yaml_config_file_name: str):
         )
 
         print(
-            f"Number of nodes in train graph is {len(train_track_graph.nodes)} and edges is {len(train_track_graph.edges)}."
+            f"Number of nodes in train track graph is {len(train_track_graph.nodes)} and edges is {len(train_track_graph.edges)}."
         )
 
     val_track_graph = TrackGraph(nx_graph=val_candidate_graph, frame_attribute="time")
     val_track_graph = add_app_disapp_attributes(val_track_graph, val_t_min, val_t_max)
 
     print(
-        f"Number of nodes in val graph is {len(val_track_graph.nodes)} and edges is {len(val_track_graph.edges)}."
+        f"Number of nodes in val track graph is {len(val_track_graph.nodes)} and edges is {len(val_track_graph.edges)}."
     )
 
     if ssvm_weights_array is None:
@@ -430,6 +437,7 @@ def track(yaml_config_file_name: str):
     val_segmentation = np.zeros(
         (val_t_max + 1, *tuple(val_image_shape)), dtype=np.uint64
     )
+
     for node, attrs in val_candidate_graph_initial.nodes.items():
         t, id_ = node.split("_")
         t, id_ = int(t), int(id_)
