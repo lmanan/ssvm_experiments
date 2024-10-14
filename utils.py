@@ -14,13 +14,51 @@ from costs import (
     EdgeEmbeddingDistance,
     TimeGap,
 )
+from motile.variables import NodeSelected, EdgeSelected, NodeAppear, NodeDisappear
 from motile.track_graph import TrackGraph
 from motile_toolbox.candidate_graph import NodeAttr, EdgeAttr
 from typing import List
 
 
+def save_ilp_result(solution_graph, results_dir_name):
+    ilp_results_data = []
+    for edge in solution_graph.edges:
+        u, v = edge
+        if isinstance(u, tuple):
+            (u,) = u
+
+        t_u, id_u = u.split("_")
+        t_u, id_u = int(t_u), int(id_u)
+        if isinstance(v, tuple):
+            m, n = v
+
+            t_m, id_m = m.split("_")
+            t_m, id_m = int(t_m), int(id_m)
+
+            t_n, id_n = n.split("_")
+            t_n, id_n = int(t_n), int(id_n)
+
+            ilp_results_data.append([id_u, t_u, id_m, t_m])
+            ilp_results_data.append([id_u, t_u, id_n, t_n])
+        else:
+            t_v, id_v = v.split("_")
+            t_v, id_v = int(t_v), int(id_v)
+
+            ilp_results_data.append([id_u, t_u, id_v, t_v])
+
+    np.savetxt(
+        results_dir_name + "/jsons/ilp.csv",
+        np.asarray(ilp_results_data),
+        delimiter=" ",
+        fmt=["%i", "%i", "%i", "%i"],
+    )
+
+
 def set_feature_mask_app_disapp(
-    ground_truth: np.ndarray, mask: np.ndarray, track_graph: TrackGraph
+    ground_truth: np.ndarray,
+    mask: np.ndarray,
+    track_graph: TrackGraph,
+    gt_attribute: str = "gt",
 ):
     """get_feature_mask_app_disapp.
     Given correct ground truth and mask, this figures out which node appearance
@@ -44,7 +82,6 @@ def set_feature_mask_app_disapp(
         annotated.
     track_graph: TrackGraph
     """
-    gt_attribute = "gt"
     for node in track_graph.nodes:
         previous_edges_gt = 0
         next_edges_gt = 0
@@ -63,18 +100,91 @@ def set_feature_mask_app_disapp(
         elif previous_edges_gt > 0 and next_edges_gt == 0:
             track_graph.nodes[NodeAttr.FEATURE_MASK_APPEAR] = 0
             track_graph.nodes[NodeAttr.FEATURE_MASK_DISAPPEAR] = (
-                1  # since we don't know if the track ended at this node, so this feature should be masked
+                1  # since we don't know if the track ended at this node, so this feature should be masked out.
             )
         elif previous_edges_gt == 0 and next_edges_gt > 0:
             track_graph.nodes[NodeAttr.FEATURE_MASK_APPEAR] = (
-                1  # since we don't know for sure if the track started at this node, so this feature should be masked.
+                1  # since we don't know for sure if the track started at this node, so this feature should be masked out.
             )
             track_graph.nodes[NodeAttr.FEATURE_MASK_DISAPPEAR] = 0
         elif previous_edges_gt == 0 and next_edges_gt == 0:
             track_graph.nodes[NodeAttr.FEATURE_MASK_APPEAR] = (
-                1  # since we don't know for sure if the track started at this node, so this feature should be masked.
+                1  # since we don't know for sure if the track started at this node, so this feature should be masked out.
             )
             track_graph.nodes[NodeAttr.FEATURE_MASK_DISAPPEAR] = 1
+            # since we don't know if the track stopped at this node, so this feature should be masked out.
+
+
+def set_ground_truth_mask(solver):
+    mask = np.zeros((solver.num_variables), dtype=np.float32)
+    ground_truth = np.zeros_like(mask)
+    gt_attribute = "gt"
+    for node, index in solver.get_variables(NodeSelected).items():
+        gt = solver.graph.nodes[node].get(gt_attribute, None)
+        if gt is not None:
+            mask[index] = 1.0
+            ground_truth[index] = gt
+
+    for node, index in solver.get_variables(NodeAppear).items():
+        if "ignore_appear_cost" in solver.graph.nodes[node]:
+            mask[index] = 1.0
+            ground_truth[index] = 1.0  # nodes appear at boundary condition
+
+    for node, index in solver.get_variables(NodeDisappear).items():
+        if "ignore_disappear_cost" in solver.graph.nodes[node]:
+            mask[index] = 1.0
+            ground_truth[index] = 1.0  # nodes disappear at boundary condition
+
+    for edge, index in solver.get_variables(EdgeSelected).items():
+        u, v = edge
+        if isinstance(v, tuple):
+            (u,) = u
+            (v1, v2) = v
+            index_v1_appear = solver.get_variables(NodeAppear)[v1]
+            index_v2_appear = solver.get_variables(NodeAppear)[v2]
+            index_u_disappear = solver.get_variables(NodeDisappear)[u]
+            gt = solver.graph.edges[edge].get(gt_attribute, None)
+            if gt is not None:
+                mask[index] = 1.0
+                ground_truth[index] = gt
+                if gt == 1.0:  # only if true !!
+                    mask[index_u_disappear] = 0
+                    ground_truth[index_u_disappear] = 0
+                    mask[index_v1_appear] = 1.0
+                    ground_truth[index_v1_appear] = 0
+                    mask[index_v2_appear] = 1.0
+                    ground_truth[index_v2_appear] = 0
+        else:
+            index_v_appear = solver.get_variables(NodeAppear)[v]
+            index_u_disappear = solver.get_variables(NodeDisappear)[u]
+            gt = solver.graph.edges[edge].get(gt_attribute, None)
+            if gt is not None:
+                mask[index] = 1.0
+                ground_truth[index] = gt
+                if gt == 1.0:
+                    mask[index_u_disappear] = 1.0
+                    ground_truth[index_u_disappear] = 0
+                    mask[index_v_appear] = 1.0
+                    ground_truth[index_v_appear] = 0
+
+    return ground_truth, mask
+
+
+def get_recursion_limit(candidate_graph):
+    max_in_edges = max_out_edges = 0
+    for node in candidate_graph.nodes:
+        num_next = len(candidate_graph.out_edges(node))
+        if num_next > max_out_edges:
+            max_out_edges = num_next
+
+        num_prev = len(candidate_graph.in_edges(node))
+        if num_prev > max_in_edges:
+            max_in_edges = num_prev
+
+    print("+" * 10)
+    print(f"Maximum out edges is {max_out_edges}, max in edges {max_in_edges}.")
+    temp_limit = np.maximum(max_in_edges, max_out_edges) + 500
+    return temp_limit
 
 
 def load_tif_data(segmentation_dir_name: str, add_channel_axis=True):

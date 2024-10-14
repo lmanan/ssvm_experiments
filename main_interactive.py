@@ -30,7 +30,7 @@ import sys
 from yaml import load, Loader
 
 logging.basicConfig(
-    level=logging.DEBUG, format="%(asctime)s %(name)s %(levelname)-8s %(message)s"
+    level=logging.INFO, format="%(asctime)s %(name)s %(levelname)-8s %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -91,7 +91,7 @@ def track(yaml_config_file_name: str):
     train_t_max = int(np.max(train_array[:, 1]))
 
     print(
-        f"Min train time point is {train_t_min}, Max train time point is {train_t_max}"
+        f"Min train time point is {train_t_min}, Max train time point is {train_t_max}."
     )
 
     val_array = load_csv_data(csv_file_name=val_csv_file_name)
@@ -99,7 +99,7 @@ def track(yaml_config_file_name: str):
     print(f"Val array has shape {val_array.shape}.")
     val_t_min = int(np.min(val_array[:, 1]))
     val_t_max = int(np.max(val_array[:, 1]))
-    print(f"Min val time point is {val_t_min}, Max val time point is {val_t_max}")
+    print(f"Min val time point is {val_t_min}, Max val time point is {val_t_max}. ")
 
     mean_edge_distance = std_edge_distance = None
     mean_node_embedding_distance = std_node_embedding_distance = None
@@ -117,7 +117,7 @@ def track(yaml_config_file_name: str):
     )
 
     print(
-        f"mean edge distance {mean_edge_distance}, std edge distance {std_edge_distance}"
+        f"Mean edge distance {mean_edge_distance}, Std edge distance {std_edge_distance}."
     )
     val_candidate_graph_initial, _, _ = get_candidate_graph_from_points_list(
         points_list=val_array,
@@ -132,10 +132,10 @@ def track(yaml_config_file_name: str):
         val_candidate_graph_initial = flip_edges(val_candidate_graph_initial)
 
     print(
-        f"Number of nodes in train graph initial is {len(train_candidate_graph_initial.nodes)} and edges is {len(train_candidate_graph_initial.edges)}"
+        f"Number of nodes in train graph initial is {len(train_candidate_graph_initial.nodes)} and edges is {len(train_candidate_graph_initial.edges)}."
     )
     print(
-        f"Number of nodes in val graph initial is {len(val_candidate_graph_initial.nodes)} and edges is {len(val_candidate_graph_initial.edges)}"
+        f"Number of nodes in val graph initial is {len(val_candidate_graph_initial.nodes)} and edges is {len(val_candidate_graph_initial.edges)}. "
     )
 
     # add train_node_embedding
@@ -202,7 +202,6 @@ def track(yaml_config_file_name: str):
                             EdgeAttr.EDGE_EMBEDDING.value
                         ]
                     )
-            print(len(edge_embedding_distance_list))
             mean_edge_embedding_distance = np.mean(edge_embedding_distance_list)
             std_edge_embedding_distance = np.std(edge_embedding_distance_list)
             print(
@@ -260,14 +259,14 @@ def track(yaml_config_file_name: str):
         )
 
         print(
-            f"Number of nodes in train graph is {len(train_track_graph.nodes)} and edges is {len(train_track_graph.edges)}"
+            f"Number of nodes in train track graph is {len(train_track_graph.nodes)} and edges is {len(train_track_graph.edges)}."
         )
 
     val_track_graph = TrackGraph(nx_graph=val_candidate_graph, frame_attribute="time")
     val_track_graph = add_app_disapp_attributes(val_track_graph, val_t_min, val_t_max)
 
     print(
-        f"Number of nodes in val graph is {len(val_track_graph.nodes)} and edges is {len(val_track_graph.edges)}"
+        f"Number of nodes in val track graph is {len(val_track_graph.nodes)} and edges is {len(val_track_graph.edges)}."
     )
 
     if ssvm_weights_array is None:
@@ -364,12 +363,13 @@ def track(yaml_config_file_name: str):
                 if gt is not None:
                     mask[index] = 1.0
                     ground_truth[index] = gt
-                    mask[index_u_disappear] = 0
-                    ground_truth[index_u_disappear] = 0
-                    mask[index_v1_appear] = 1.0
-                    ground_truth[index_v1_appear] = 0
-                    mask[index_v2_appear] = 1.0
-                    ground_truth[index_v2_appear] = 0
+                    if gt == 1.0:
+                        mask[index_u_disappear] = 0
+                        ground_truth[index_u_disappear] = 0
+                        mask[index_v1_appear] = 1.0
+                        ground_truth[index_v1_appear] = 0
+                        mask[index_v2_appear] = 1.0
+                        ground_truth[index_v2_appear] = 0
             else:
                 index_v_appear = solver.get_variables(NodeAppear)[v]
                 index_u_disappear = solver.get_variables(NodeDisappear)[u]
@@ -377,10 +377,11 @@ def track(yaml_config_file_name: str):
                 if gt is not None:
                     mask[index] = 1.0
                     ground_truth[index] = gt
-                    mask[index_u_disappear] = 1.0
-                    ground_truth[index_u_disappear] = 0
-                    mask[index_v_appear] = 1.0
-                    ground_truth[index_v_appear] = 0
+                    if gt == 1.0:
+                        mask[index_u_disappear] = 1.0
+                        ground_truth[index_u_disappear] = 0
+                        mask[index_v_appear] = 1.0
+                        ground_truth[index_v_appear] = 0
 
         set_feature_mask_app_disapp(ground_truth, mask)
 
@@ -458,7 +459,6 @@ def track(yaml_config_file_name: str):
     solution_graph = solver.get_selected_subgraph(solution)
 
     ilp_results_data = []
-    print(f"Solution graph has {len(solution_graph.edges)}")
     for edge in solution_graph.edges:
         u, v = edge
         if isinstance(u, tuple):
@@ -492,7 +492,7 @@ def track(yaml_config_file_name: str):
 
     print("+" * 10)
     print(
-        f"After optimization, we selected {len(solution_graph.nodes)} nodes and {len(solution_graph.edges)} edges"
+        f"After optimization, we selected {len(solution_graph.nodes)} nodes and {len(solution_graph.edges)} edges."
     )
     print("+" * 10)
 
@@ -501,8 +501,6 @@ def track(yaml_config_file_name: str):
     val_segmentation = np.zeros(
         (val_t_max + 1, *tuple(val_image_shape)), dtype=np.uint64
     )
-    # val_segmentation = np.zeros((600, 565//5, 660//2, 700//2), dtype=np.uint64)
-
     for node, attrs in val_candidate_graph_initial.nodes.items():
         t, id_ = node.split("_")
         t, id_ = int(t), int(id_)
@@ -530,7 +528,7 @@ def track(yaml_config_file_name: str):
     # convert to track graph
     val_gt_track_graph = TrackGraph(nx_graph=val_gt_graph, frame_attribute="time")
     print(
-        f"Number of nodes in the test imaging dataset is {len(val_gt_track_graph.nodes)} and edges is {len(val_gt_track_graph.edges)}"
+        f"Number of nodes in the groundtruth val dataset is {len(val_gt_track_graph.nodes)} and edges is {len(val_gt_track_graph.edges)}"
     )
 
     for node in val_gt_track_graph.nodes:
