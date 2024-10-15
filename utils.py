@@ -65,10 +65,10 @@ def set_feature_mask_app_disapp(
     features and disappearance features should be zeroed out and hence not
     considered.
 
-    Here, if `feature_mask_app` is set to 1 for a node, that means that node feature should
-    be zeroed out.
+    Here, if `feature_mask_app` is set to 1 for a node, that means that node
+    appearance feature should be zeroed out.
     Similarly, if `feature_mask_disapp` is set to 1 for a node, that means that
-    nod feature should be zeroed out.
+    node disappearance feature should be zeroed out.
 
     Parameters
     ----------
@@ -82,7 +82,11 @@ def set_feature_mask_app_disapp(
         annotated.
     track_graph: TrackGraph
     """
-    for node in track_graph.nodes:
+    track_graph_nodes = track_graph.nodes.copy()
+    # this above is needed, because if iterating directly over track_graph,
+    # then node attributes are changed in each iteration and this leads to a
+    # runtime error.
+    for node in track_graph_nodes:
         previous_edges_gt = 0
         next_edges_gt = 0
         for edge in track_graph.prev_edges[node]:
@@ -115,10 +119,9 @@ def set_feature_mask_app_disapp(
             # since we don't know if the track stopped at this node, so this feature should be masked out.
 
 
-def set_ground_truth_mask(solver):
+def set_ground_truth_mask(solver, gt_attribute="gt"):
     mask = np.zeros((solver.num_variables), dtype=np.float32)
     ground_truth = np.zeros_like(mask)
-    gt_attribute = "gt"
     for node, index in solver.get_variables(NodeSelected).items():
         gt = solver.graph.nodes[node].get(gt_attribute, None)
         if gt is not None:
@@ -126,12 +129,12 @@ def set_ground_truth_mask(solver):
             ground_truth[index] = gt
 
     for node, index in solver.get_variables(NodeAppear).items():
-        if "ignore_appear_cost" in solver.graph.nodes[node]:
+        if NodeAttr.IGNORE_APPEAR_COST in solver.graph.nodes[node]:
             mask[index] = 1.0
             ground_truth[index] = 1.0  # nodes appear at boundary condition
 
     for node, index in solver.get_variables(NodeDisappear).items():
-        if "ignore_disappear_cost" in solver.graph.nodes[node]:
+        if NodeAttr.IGNORE_DISAPPEAR_COST in solver.graph.nodes[node]:
             mask[index] = 1.0
             ground_truth[index] = 1.0  # nodes disappear at boundary condition
 
