@@ -48,8 +48,8 @@ def cumulate_attrackt_scores(
     ilp_csv_file_name: str,
     detections_csv_file_name: str,
     output_csv_file_name: str,
-    backward_output_gt_file_name: str,
-    forward_output_gt_file_name: str,
+    # backward_output_gt_file_name: str,
+    # forward_output_gt_file_name: str,
     select_num_rows: int,
     sampling: str,
     num_nearest_neighbours: int = 5,
@@ -57,6 +57,7 @@ def cumulate_attrackt_scores(
 ):
 
     detections_data = np.loadtxt(detections_csv_file_name, delimiter=" ")
+    print(f"detections data has shape {detections_data.shape}.")
     candidate_graph, _, _ = get_candidate_graph_from_points_list(
         points_list=detections_data,
         max_edge_distance=None,
@@ -71,6 +72,9 @@ def cumulate_attrackt_scores(
     groundtruth_graph = add_gt_edges_to_graph(
         groundtruth_graph=groundtruth_graph, gt_data=detections_data
     )
+    print(
+        f"groundtruth graph has {len(groundtruth_graph.nodes)} nodes and {len(groundtruth_graph.edges)} edges."
+    )
 
     attrackt_data = np.loadtxt(
         attrackt_csv_file_name, delimiter=" "
@@ -83,12 +87,16 @@ def cumulate_attrackt_scores(
         else:
             # check if in dictionary
             node_id = str(int(row[1])) + "_" + str(int(row[0]))
-            if node_id in attrackt_dictionary:
-                pass
-            else:
-                attrackt_dictionary[node_id] = 0.0
-            attrackt_dictionary[node_id] += float(row[-1])
+            if node_id in groundtruth_graph.nodes:  # ignore nodes not in detection
+                if node_id in attrackt_dictionary:
+                    pass
+                else:
+                    attrackt_dictionary[node_id] = 0.0
+                attrackt_dictionary[node_id] += float(row[-1])
 
+    print(
+        f"Number of keys in attrackt dictionary is {len(attrackt_dictionary.keys())}."
+    )
     ilp_data = np.loadtxt(ilp_csv_file_name, delimiter=" ")
     ilp_dictionary = {}
     for row in ilp_data:
@@ -99,6 +107,7 @@ def cumulate_attrackt_scores(
         else:
             ilp_dictionary[node_u] = 1.0
 
+    print(f"Number of keys in ilp dictionary is {len(ilp_dictionary.keys())}.")
     final_array = []
     for key in attrackt_dictionary:
         deficit = attrackt_dictionary[key]
@@ -162,6 +171,9 @@ def cumulate_attrackt_scores(
             else:
                 backward_supervision_dictionary[v][u] = 0.0
 
+    backward_output_gt_file_name = (
+        "backward-" + sampling + "-" + str(select_num_rows).zfill(5) + ".json"
+    )
     with open(backward_output_gt_file_name, "w") as outfile:
         json.dump(backward_supervision_dictionary, outfile)
 
@@ -192,6 +204,9 @@ def cumulate_attrackt_scores(
             else:
                 forward_supervision_dictionary[u][v] = 0.0
 
+    forward_output_gt_file_name = (
+        "forward-" + sampling + "-" + str(select_num_rows).zfill(5) + ".json"
+    )
     with open(forward_output_gt_file_name, "w") as outfile:
         json.dump(forward_supervision_dictionary, outfile)
 
@@ -209,8 +224,8 @@ if __name__ == "__main__":
         attrackt_csv_file_name=args["attrackt_csv_file_name"],
         ilp_csv_file_name=args["ilp_csv_file_name"],
         output_csv_file_name=args["output_csv_file_name"],
-        backward_output_gt_file_name=args["backward_output_gt_file_name"],
-        forward_output_gt_file_name=args["forward_output_gt_file_name"],
+        # backward_output_gt_file_name=args["backward_output_gt_file_name"],
+        # forward_output_gt_file_name=args["forward_output_gt_file_name"],
         detections_csv_file_name=args["detections_csv_file_name"],
         select_num_rows=int(args["select_num_rows"]),
         sampling=args["sampling"],

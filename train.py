@@ -22,6 +22,13 @@ from motile_toolbox.candidate_graph import (
 )
 from motile import TrackGraph, Solver
 import pprint
+import logging
+
+logging.basicConfig(
+    level=logging.DEBUG, format="%(asctime)s %(name)s %(levelname)-8s %(message)s"
+)
+logger = logging.getLogger(__name__)
+
 
 pp = pprint.PrettyPrinter(indent=4)
 
@@ -32,7 +39,7 @@ def train(yaml_config_file_name: str):
         args = load(stream, Loader=Loader)
 
     print("+" * 10)
-    pp.print(args)
+    pp.pprint(args)
     train_csv_file_name = args["train_csv_file_name"]
     num_nearest_neighbours = args["num_nearest_neighbours"]
     max_edge_distance = args["max_edge_distance"]
