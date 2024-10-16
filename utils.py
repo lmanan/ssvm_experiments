@@ -82,11 +82,11 @@ def set_feature_mask_app_disapp(
         annotated.
     track_graph: TrackGraph
     """
-    track_graph_nodes = track_graph.nodes.copy()
+    # track_graph_nodes = track_graph.nodes.copy()
     # this above is needed, because if iterating directly over track_graph,
     # then node attributes are changed in each iteration and this leads to a
     # runtime error.
-    for node in track_graph_nodes:
+    for node in track_graph.nodes:
         previous_edges_gt = 0
         next_edges_gt = 0
         for edge in track_graph.prev_edges[node]:
@@ -99,24 +99,25 @@ def set_feature_mask_app_disapp(
                     next_edges_gt += 1
 
         if previous_edges_gt > 0 and next_edges_gt > 0:
-            track_graph.nodes[NodeAttr.FEATURE_MASK_APPEAR] = 0
-            track_graph.nodes[NodeAttr.FEATURE_MASK_DISAPPEAR] = 0
+            track_graph.nodes[node][NodeAttr.FEATURE_MASK_APPEAR.value] = 0
+            track_graph.nodes[node][NodeAttr.FEATURE_MASK_DISAPPEAR.value] = 0
         elif previous_edges_gt > 0 and next_edges_gt == 0:
-            track_graph.nodes[NodeAttr.FEATURE_MASK_APPEAR] = 0
-            track_graph.nodes[NodeAttr.FEATURE_MASK_DISAPPEAR] = (
-                1  # since we don't know if the track ended at this node, so this feature should be masked out.
-            )
+            track_graph.nodes[node][NodeAttr.FEATURE_MASK_APPEAR.value] = 0
+            track_graph.nodes[node][
+                NodeAttr.FEATURE_MASK_DISAPPEAR.value
+            ] = 1  # since we don't know if the track ended at this node, so this feature should be masked out.
         elif previous_edges_gt == 0 and next_edges_gt > 0:
-            track_graph.nodes[NodeAttr.FEATURE_MASK_APPEAR] = (
-                1  # since we don't know for sure if the track started at this node, so this feature should be masked out.
-            )
-            track_graph.nodes[NodeAttr.FEATURE_MASK_DISAPPEAR] = 0
+            track_graph.nodes[node][
+                NodeAttr.FEATURE_MASK_APPEAR.value
+            ] = 1  # since we don't know for sure if the track started at this node, so this feature should be masked out.
+            track_graph.nodes[node][NodeAttr.FEATURE_MASK_DISAPPEAR.value] = 0
         elif previous_edges_gt == 0 and next_edges_gt == 0:
-            track_graph.nodes[NodeAttr.FEATURE_MASK_APPEAR] = (
-                1  # since we don't know for sure if the track started at this node, so this feature should be masked out.
-            )
-            track_graph.nodes[NodeAttr.FEATURE_MASK_DISAPPEAR] = 1
+            track_graph.nodes[node][
+                NodeAttr.FEATURE_MASK_APPEAR.value
+            ] = 1  # since we don't know for sure if the track started at this node, so this feature should be masked out.
+            track_graph.nodes[node][NodeAttr.FEATURE_MASK_DISAPPEAR.value] = 1
             # since we don't know if the track stopped at this node, so this feature should be masked out.
+    return track_graph
 
 
 def set_ground_truth_mask(solver, gt_attribute="gt"):
@@ -129,14 +130,16 @@ def set_ground_truth_mask(solver, gt_attribute="gt"):
             ground_truth[index] = gt
 
     for node, index in solver.get_variables(NodeAppear).items():
-        if NodeAttr.IGNORE_APPEAR_COST in solver.graph.nodes[node]:
-            mask[index] = 1.0
-            ground_truth[index] = 1.0  # nodes appear at boundary condition
+        if NodeAttr.IGNORE_APPEAR_COST.value in solver.graph.nodes[node]:
+            if solver.graph.nodes[node][NodeAttr.IGNORE_APPEAR_COST.value] == 1.0:
+                mask[index] = 1.0
+                ground_truth[index] = 1.0  # nodes appear at boundary condition
 
     for node, index in solver.get_variables(NodeDisappear).items():
-        if NodeAttr.IGNORE_DISAPPEAR_COST in solver.graph.nodes[node]:
-            mask[index] = 1.0
-            ground_truth[index] = 1.0  # nodes disappear at boundary condition
+        if NodeAttr.IGNORE_DISAPPEAR_COST.value in solver.graph.nodes[node]:
+            if solver.graph.nodes[node][NodeAttr.IGNORE_DISAPPEAR_COST.value] == 1.0:
+                mask[index] = 1.0
+                ground_truth[index] = 1.0  # nodes disappear at boundary condition
 
     for edge, index in solver.get_variables(EdgeSelected).items():
         u, v = edge
