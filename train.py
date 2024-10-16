@@ -239,9 +239,6 @@ def train(yaml_config_file_name: str):
 
     solver = Solver(track_graph=train_track_graph)
 
-    ground_truth, mask = set_ground_truth_mask(solver)
-    set_feature_mask_app_disapp(ground_truth, mask, train_track_graph)
-
     node_embedding_exists = False if train_node_embedding_file_name is None else True
     edge_embedding_exists = False if train_edge_embedding_file_name is None else True
 
@@ -259,10 +256,18 @@ def train(yaml_config_file_name: str):
         std_edge_embedding_distance=std_edge_embedding_distance,
     )
     solver = add_constraints(solver=solver, pin_nodes=pin_nodes)
+
+    ground_truth, mask = set_ground_truth_mask(solver)
+    train_track_graph = set_feature_mask_app_disapp(
+        ground_truth, mask, train_track_graph
+    )
+
     solver.fit_weights(
         gt_attribute="gt",
         regularizer_weight=regularizer_weight,
         max_iterations=1000,
+        ground_truth=ground_truth,
+        mask=mask,
     )
     ssvm_weights = solver.weights
     weights_by_name = ssvm_weights._weights_by_name
