@@ -82,10 +82,6 @@ def set_feature_mask_app_disapp(
         annotated.
     track_graph: TrackGraph
     """
-    # track_graph_nodes = track_graph.nodes.copy()
-    # this above is needed, because if iterating directly over track_graph,
-    # then node attributes are changed in each iteration and this leads to a
-    # runtime error.
     for node in track_graph.nodes:
         previous_edges_gt = 0
         next_edges_gt = 0
@@ -120,26 +116,46 @@ def set_feature_mask_app_disapp(
     return track_graph
 
 
-def set_ground_truth_mask(solver, gt_attribute="gt"):
+def set_ground_truth_mask(solver: motile.Solver, gt_attribute: str = "gt"):
+    """set_ground_truth_mask.
+    This function tries to figure out which variables we have gt annotation
+    for.
+
+    """
+
     mask = np.zeros((solver.num_variables), dtype=np.float32)
     ground_truth = np.zeros_like(mask)
+    # if nodes have `gt_attribute` specified, set mask and groundtruth for NodeSelected
+    # variables.
     for node, index in solver.get_variables(NodeSelected).items():
         gt = solver.graph.nodes[node].get(gt_attribute, None)
         if gt is not None:
             mask[index] = 1.0
             ground_truth[index] = gt
 
+    # if nodes have `ignore appear` attribute sepcified, set mask and groundtruth for
+    # NodeAppear variables.
     for node, index in solver.get_variables(NodeAppear).items():
         if NodeAttr.IGNORE_APPEAR_COST.value in solver.graph.nodes[node]:
             if solver.graph.nodes[node][NodeAttr.IGNORE_APPEAR_COST.value] == 1.0:
                 mask[index] = 1.0
                 ground_truth[index] = 1.0  # nodes appear at boundary condition
 
+    # if nodes have `ignore disappear` attribute specified, set mask and groundtruth for
+    # NodeDisappear variables.
     for node, index in solver.get_variables(NodeDisappear).items():
         if NodeAttr.IGNORE_DISAPPEAR_COST.value in solver.graph.nodes[node]:
             if solver.graph.nodes[node][NodeAttr.IGNORE_DISAPPEAR_COST.value] == 1.0:
                 mask[index] = 1.0
                 ground_truth[index] = 1.0  # nodes disappear at boundary condition
+
+    # if edges have `gt_attribute` specified, set mask and ground truth for
+    # `EdgeSelected` variables.
+    # IMPORTANT:
+    # If groundtruth annotation value is 1.0, then we can also say
+    # that mask and groundtruth for NodeDisappear for starting node
+    # is known and mask and ground truth for Node Appear for ending
+    # nodes is known.
 
     for edge, index in solver.get_variables(EdgeSelected).items():
         u, v = edge
@@ -153,7 +169,7 @@ def set_ground_truth_mask(solver, gt_attribute="gt"):
             if gt is not None:
                 mask[index] = 1.0
                 ground_truth[index] = gt
-                if gt == 1.0:  # only if true !!
+                if gt == 1.0:
                     mask[index_u_disappear] = 0
                     ground_truth[index_u_disappear] = 0
                     mask[index_v1_appear] = 1.0
