@@ -133,7 +133,7 @@ def set_ground_truth_mask(solver: motile.Solver, gt_attribute: str = "gt"):
             mask[index] = 1.0
             ground_truth[index] = gt
 
-    # if nodes have `ignore appear` attribute sepcified, set mask and groundtruth for
+    # if nodes have `ignore appear` attribute specified, set mask and groundtruth for
     # NodeAppear variables.
     for node, index in solver.get_variables(NodeAppear).items():
         if NodeAttr.IGNORE_APPEAR_COST.value in solver.graph.nodes[node]:
