@@ -53,9 +53,7 @@ def save_ilp_result(solution_graph, results_dir_name):
     )
 
 
-def set_ground_truth_mask(
-    solver: motile.Solver, gt_attribute: str = "gt", pin_nodes: bool = True
-):
+def set_ground_truth_mask(solver: motile.Solver, gt_attribute: str = "gt"):
     """set_ground_truth_mask.
     This function tries to figure out which variables we have gt annotation
     for.
@@ -68,13 +66,10 @@ def set_ground_truth_mask(
     # variables.
 
     for node, index in solver.get_variables(NodeSelected).items():
-        # gt = solver.graph.nodes[node].get(gt_attribute, None)
-        # if gt is not None:
-        #    mask[index] = 1.0
-        #    ground_truth[index] = gt
-        if pin_nodes:
+        gt = solver.graph.nodes[node].get(gt_attribute, None)
+        if gt is not None:
             mask[index] = 1.0
-            ground_truth[index] = 1.0
+            ground_truth[index] = gt
 
     # if edges have `gt_attribute` specified, set mask and ground truth for
     # `EdgeSelected` variables.

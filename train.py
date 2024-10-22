@@ -256,9 +256,7 @@ def train(yaml_config_file_name: str):
     )
     solver = add_constraints(solver=solver, pin_nodes=pin_nodes)
 
-    ground_truth, mask = set_ground_truth_mask(
-        solver, gt_attribute="gt", pin_nodes=pin_nodes
-    )
+    ground_truth, mask = set_ground_truth_mask(solver, gt_attribute="gt")
 
     solver.fit_weights(
         gt_attribute="gt",
