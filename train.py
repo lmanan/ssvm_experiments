@@ -7,7 +7,6 @@ import numpy as np
 from utils import (
     get_recursion_limit,
     set_ground_truth_mask,
-    set_feature_mask_app_disapp,
     load_csv_data,
     flip_edges,
     add_hyper_edges,
@@ -257,9 +256,8 @@ def train(yaml_config_file_name: str):
     )
     solver = add_constraints(solver=solver, pin_nodes=pin_nodes)
 
-    ground_truth, mask = set_ground_truth_mask(solver)
-    train_track_graph = set_feature_mask_app_disapp(
-        ground_truth, mask, train_track_graph
+    ground_truth, mask = set_ground_truth_mask(
+        solver, gt_attribute="gt", pin_nodes=pin_nodes
     )
 
     solver.fit_weights(
