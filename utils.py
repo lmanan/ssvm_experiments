@@ -15,7 +15,6 @@ from costs import (
     TimeGap,
 )
 from motile.variables import NodeSelected, EdgeSelected, NodeAppear, NodeDisappear
-from motile.track_graph import TrackGraph
 from motile_toolbox.candidate_graph import NodeAttr, EdgeAttr
 from typing import List
 
@@ -54,69 +53,9 @@ def save_ilp_result(solution_graph, results_dir_name):
     )
 
 
-def set_feature_mask_app_disapp(
-    ground_truth: np.ndarray,
-    mask: np.ndarray,
-    track_graph: TrackGraph,
-    gt_attribute: str = "gt",
+def set_ground_truth_mask(
+    solver: motile.Solver, gt_attribute: str = "gt", pin_nodes: bool = True
 ):
-    """get_feature_mask_app_disapp.
-    Given correct ground truth and mask, this figures out which node appearance
-    features and disappearance features should be zeroed out and hence not
-    considered.
-
-    Here, if `feature_mask_app` is set to 1 for a node, that means that node
-    appearance feature should be zeroed out.
-    Similarly, if `feature_mask_disapp` is set to 1 for a node, that means that
-    node disappearance feature should be zeroed out.
-
-    Parameters
-    ----------
-    ground_truth : np.ndarray
-        ground_truth is numpy array (N,) where N is the number of variables.
-        It has been annotated 1 if variable is there and 0 if variable isn't
-        there.
-    mask : np.ndarray
-        mask is numpy array (N,) where N is the number of variables. It has
-        been annotated 1 if variable was annotated and 0 if variable was not
-        annotated.
-    track_graph: TrackGraph
-    """
-    for node in track_graph.nodes:
-        previous_edges_gt = 0
-        next_edges_gt = 0
-        for edge in track_graph.prev_edges[node]:
-            if gt_attribute in track_graph.edges[edge]:
-                if track_graph.edges[edge][gt_attribute] == 1:
-                    previous_edges_gt += 1
-        for edge in track_graph.next_edges[node]:
-            if gt_attribute in track_graph.edges[edge]:
-                if track_graph.edges[edge][gt_attribute] == 1:
-                    next_edges_gt += 1
-
-        if previous_edges_gt > 0 and next_edges_gt > 0:
-            track_graph.nodes[node][NodeAttr.FEATURE_MASK_APPEAR.value] = 0
-            track_graph.nodes[node][NodeAttr.FEATURE_MASK_DISAPPEAR.value] = 0
-        elif previous_edges_gt > 0 and next_edges_gt == 0:
-            track_graph.nodes[node][NodeAttr.FEATURE_MASK_APPEAR.value] = 0
-            track_graph.nodes[node][
-                NodeAttr.FEATURE_MASK_DISAPPEAR.value
-            ] = 1  # since we don't know if the track ended at this node, so this feature should be masked out.
-        elif previous_edges_gt == 0 and next_edges_gt > 0:
-            track_graph.nodes[node][
-                NodeAttr.FEATURE_MASK_APPEAR.value
-            ] = 1  # since we don't know for sure if the track started at this node, so this feature should be masked out.
-            track_graph.nodes[node][NodeAttr.FEATURE_MASK_DISAPPEAR.value] = 0
-        elif previous_edges_gt == 0 and next_edges_gt == 0:
-            track_graph.nodes[node][
-                NodeAttr.FEATURE_MASK_APPEAR.value
-            ] = 1  # since we don't know for sure if the track started at this node, so this feature should be masked out.
-            track_graph.nodes[node][NodeAttr.FEATURE_MASK_DISAPPEAR.value] = 1
-            # since we don't know if the track stopped at this node, so this feature should be masked out.
-    return track_graph
-
-
-def set_ground_truth_mask(solver: motile.Solver, gt_attribute: str = "gt"):
     """set_ground_truth_mask.
     This function tries to figure out which variables we have gt annotation
     for.
@@ -127,11 +66,15 @@ def set_ground_truth_mask(solver: motile.Solver, gt_attribute: str = "gt"):
     ground_truth = np.zeros_like(mask)
     # if nodes have `gt_attribute` specified, set mask and groundtruth for NodeSelected
     # variables.
+
     for node, index in solver.get_variables(NodeSelected).items():
-        gt = solver.graph.nodes[node].get(gt_attribute, None)
-        if gt is not None:
+        # gt = solver.graph.nodes[node].get(gt_attribute, None)
+        # if gt is not None:
+        #    mask[index] = 1.0
+        #    ground_truth[index] = gt
+        if pin_nodes:
             mask[index] = 1.0
-            ground_truth[index] = gt
+            ground_truth[index] = 1.0
 
     # if edges have `gt_attribute` specified, set mask and ground truth for
     # `EdgeSelected` variables.
