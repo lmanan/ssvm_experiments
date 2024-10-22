@@ -133,22 +133,6 @@ def set_ground_truth_mask(solver: motile.Solver, gt_attribute: str = "gt"):
             mask[index] = 1.0
             ground_truth[index] = gt
 
-    # if nodes have `ignore appear` attribute specified, set mask and groundtruth for
-    # NodeAppear variables.
-    for node, index in solver.get_variables(NodeAppear).items():
-        if NodeAttr.IGNORE_APPEAR_COST.value in solver.graph.nodes[node]:
-            if solver.graph.nodes[node][NodeAttr.IGNORE_APPEAR_COST.value] == 1.0:
-                mask[index] = 1.0
-                ground_truth[index] = 1.0  # nodes appear at boundary condition
-
-    # if nodes have `ignore disappear` attribute specified, set mask and groundtruth for
-    # NodeDisappear variables.
-    for node, index in solver.get_variables(NodeDisappear).items():
-        if NodeAttr.IGNORE_DISAPPEAR_COST.value in solver.graph.nodes[node]:
-            if solver.graph.nodes[node][NodeAttr.IGNORE_DISAPPEAR_COST.value] == 1.0:
-                mask[index] = 1.0
-                ground_truth[index] = 1.0  # nodes disappear at boundary condition
-
     # if edges have `gt_attribute` specified, set mask and ground truth for
     # `EdgeSelected` variables.
     # IMPORTANT:
@@ -170,7 +154,7 @@ def set_ground_truth_mask(solver: motile.Solver, gt_attribute: str = "gt"):
                 mask[index] = 1.0
                 ground_truth[index] = gt
                 if gt == 1.0:
-                    mask[index_u_disappear] = 0
+                    mask[index_u_disappear] = 1.0
                     ground_truth[index_u_disappear] = 0
                     mask[index_v1_appear] = 1.0
                     ground_truth[index_v1_appear] = 0
