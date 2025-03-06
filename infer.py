@@ -14,7 +14,6 @@ from utils import (
     add_hyper_edges,
     add_costs,
     add_constraints,
-    expand_position,
     add_app_disapp_attributes,
 )
 
@@ -46,15 +45,19 @@ def infer(yaml_config_file_name):
     max_edge_distance = args["max_edge_distance"]
     direction_candidate_graph = args["direction_candidate_graph"]
     dT = args["dT"]
-    test_node_embedding_file_name = args["test_node_embedding_file_name"]
-    test_edge_embedding_file_name = args["test_edge_embedding_file_name"]
-    test_image_shape = args["test_image_shape"]
+    test_node_embedding_file_names = args["test_node_embedding_file_names"]
+    test_edge_embedding_file_names = args["test_edge_embedding_file_names"]
     pin_nodes = args["pin_nodes"]
+    pin_edges = args["pin_edges"]
     use_edge_distance = args["use_edge_distance"]
     write_tifs = args["write_tifs"]
     ssvm_weights_file_path = args["ssvm_weights_file_path"]
     results_dir_names = args["results_dir_names"]
     whitening = args["whitening"]
+    use_different_weights_hyper = args["use_different_weights_hyper"]
+    voxel_size = args["voxel_size"]
+    voxel_size = [float(x) for x in voxel_size]
+    supervised_csv_file_names = args["supervised_csv_file_names"]
 
     assert len(test_csv_file_names) == len(results_dir_names)
 
@@ -85,7 +88,9 @@ def infer(yaml_config_file_name):
         # Step 1 - build test candidate graph
         # ++++++++
 
-        test_array = load_csv_data(csv_file_name=test_csv_file_name)
+        test_array = load_csv_data(
+            csv_file_name=test_csv_file_name, voxel_size=voxel_size
+        )
 
         print("+" * 10)
         print(f"Test array has shape {test_array.shape}.")
@@ -126,18 +131,26 @@ def infer(yaml_config_file_name):
             f"Number of nodes in test graph initial is {len(test_candidate_graph_initial.nodes)} and edges is {len(test_candidate_graph_initial.edges)}. "
         )
 
-        if test_node_embedding_file_name is not None:
+        if test_node_embedding_file_names is not None:
+            if len(test_node_embedding_file_names) == 1:
+                test_node_embedding_file_name = test_node_embedding_file_names[0]
+            elif len(test_node_embedding_file_names) == len(results_dir_names):
+                test_node_embedding_file_name = test_node_embedding_file_names[
+                    index_result
+                ]
             test_embedding_data = np.loadtxt(
                 test_node_embedding_file_name, delimiter=" "
             )
             for row in test_embedding_data:
                 id_, t = int(row[0]), int(row[1])
                 node_id = str(t) + "_" + str(id_)
-                test_candidate_graph_initial.nodes[node_id][
-                    NodeAttr.NODE_EMBEDDING.value
-                ] = row[
-                    2:
-                ]  # seg_id t ...
+
+                if node_id in test_candidate_graph_initial.nodes:
+                    test_candidate_graph_initial.nodes[node_id][
+                        NodeAttr.NODE_EMBEDDING.value
+                    ] = row[
+                        2:
+                    ]  # seg_id t ...
 
             if (
                 whitening
@@ -163,7 +176,14 @@ def infer(yaml_config_file_name):
                     f"Mean node embedding distance is {mean_node_embedding_distance} and std node embedding distance is {std_node_embedding_distance}."
                 )
 
-        if test_edge_embedding_file_name is not None:
+        if test_edge_embedding_file_names is not None:
+            if len(test_edge_embedding_file_names) == 1:
+                test_edge_embedding_file_name = test_edge_embedding_file_names[0]
+            elif len(test_edge_embedding_file_names) == len(results_dir_names):
+                test_edge_embedding_file_name = test_edge_embedding_file_names[
+                    index_result
+                ]
+
             test_edge_embedding_data = np.loadtxt(
                 test_edge_embedding_file_name, delimiter=" "
             )
@@ -183,6 +203,21 @@ def infer(yaml_config_file_name):
                     test_candidate_graph_initial.edges[edge_id][
                         EdgeAttr.EDGE_EMBEDDING.value
                     ] = weight
+
+            # say if only a subset of edges were provided in the text file,
+            # then ...
+
+            for edge_id in test_candidate_graph_initial.edges:
+                if (
+                    EdgeAttr.EDGE_EMBEDDING.value
+                    in test_candidate_graph_initial.edges[edge_id]
+                ):
+                    pass  # already set from text file
+                else:
+                    test_candidate_graph_initial.edges[edge_id][
+                        EdgeAttr.EDGE_EMBEDDING.value
+                    ] = 0.0
+
             if (
                 whitening
                 and mean_edge_embedding_distance is None
@@ -210,9 +245,90 @@ def infer(yaml_config_file_name):
         test_candidate_graph = add_hyper_edges(
             candidate_graph=test_candidate_graph_initial
         )
+
         test_track_graph = TrackGraph(
             nx_graph=test_candidate_graph, frame_attribute="time"
         )
+        # ++++++
+        # Step 1a - figure out out edges to pin
+        # ++++++
+
+        if supervised_csv_file_names[index_result] is not None:
+
+            test_gt_graph = nx.DiGraph()
+            test_gt_graph.add_nodes_from(test_candidate_graph_initial.nodes(data=True))
+            test_gt_graph = add_gt_edges_to_graph_2(
+                groundtruth_graph=test_gt_graph, gt_data=test_array
+            )
+            test_gt_track_graph = TrackGraph(
+                nx_graph=test_gt_graph, frame_attribute="time"
+            )
+
+            supervised_data = np.loadtxt(
+                supervised_csv_file_names[index_result], delimiter=" "
+            )
+            if len(supervised_data.shape) == 1:
+                supervised_data = [supervised_data]
+
+            for row in supervised_data:
+                id_, t = int(row[0]), int(row[1])
+                node_id = str(t) + "_" + str(id_)
+                out_edges = list(test_track_graph.next_edges[node_id])
+                for out_edge in out_edges:
+                    test_track_graph.edges[out_edge][
+                        EdgeAttr.PINNED.value
+                    ] = False  # initially set everything to False.
+                out_gt_edges = list(test_gt_track_graph.next_edges[node_id])
+                for out_gt_edge in out_gt_edges:
+                    if out_gt_edge in test_track_graph.edges:
+                        print(f"Pinning gt edge {out_gt_edge}.")
+                        test_track_graph.edges[out_gt_edge][
+                            EdgeAttr.PINNED.value
+                        ] = True
+                    else:
+                        print(f"gt edge {out_gt_edge} not in test track_graph.")
+        # get hyper edge statistics
+
+        hyper_edge_distances = []
+        hyper_edge_embedding_distances = []
+        for edge in test_track_graph.edges:
+            if isinstance(edge[1], tuple):
+                (u,) = edge[0]
+                (v1, v2) = edge[1]
+                u_pos = np.array(test_track_graph.nodes[u][NodeAttr.POS.value])
+                v1_pos = np.array(test_track_graph.nodes[v1][NodeAttr.POS.value])
+                v2_pos = np.array(test_track_graph.nodes[v2][NodeAttr.POS.value])
+
+                d = np.linalg.norm(u_pos - 0.5 * (v1_pos + v2_pos))
+                hyper_edge_distances.append(d)
+                if test_edge_embedding_file_names is not None:
+                    u_v1_attrackt = test_track_graph.edges[(u, v1)][
+                        EdgeAttr.EDGE_EMBEDDING.value
+                    ]
+
+                    u_v2_attrackt = test_track_graph.edges[(u, v2)][
+                        EdgeAttr.EDGE_EMBEDDING.value
+                    ]
+
+                    d2 = np.mean([u_v1_attrackt, u_v2_attrackt])
+                    hyper_edge_embedding_distances.append(d2)
+
+        mean_hyper_edge_distance = np.mean(hyper_edge_distances)
+        std_hyper_edge_distance = np.std(hyper_edge_distances)
+
+        if test_edge_embedding_file_names is not None:
+            mean_hyper_edge_embedding_distance = np.mean(hyper_edge_embedding_distances)
+            std_hyper_edge_embedding_distance = np.std(hyper_edge_embedding_distances)
+
+            print(
+                f"Mean hyper edge distance is {mean_hyper_edge_distance} and std is {std_hyper_edge_distance}."
+            )
+            print(
+                f"Mean hyper edge embedding distance is {mean_hyper_edge_embedding_distance} and std is {std_hyper_edge_embedding_distance}."
+            )
+        else:
+            mean_hyper_edge_embedding_distance = None
+            std_hyper_edge_embedding_distance = None
         test_track_graph = add_app_disapp_attributes(
             test_track_graph, test_t_min, test_t_max
         )
@@ -231,8 +347,12 @@ def infer(yaml_config_file_name):
         # ++++++++
 
         solver = Solver(track_graph=test_track_graph)
-        node_embedding_exists = False if test_node_embedding_file_name is None else True
-        edge_embedding_exists = False if test_edge_embedding_file_name is None else True
+        node_embedding_exists = (
+            False if test_node_embedding_file_names is None else True
+        )
+        edge_embedding_exists = (
+            False if test_edge_embedding_file_names is None else True
+        )
         solver = add_costs(
             solver=solver,
             dT=dT,
@@ -245,23 +365,242 @@ def infer(yaml_config_file_name):
             std_node_embedding_distance=std_node_embedding_distance,
             mean_edge_embedding_distance=mean_edge_embedding_distance,
             std_edge_embedding_distance=std_edge_embedding_distance,
+            mean_hyper_edge_distance=mean_hyper_edge_distance,
+            std_hyper_edge_distance=std_hyper_edge_distance,
+            mean_hyper_edge_embedding_distance=mean_hyper_edge_embedding_distance,
+            std_hyper_edge_embedding_distance=std_hyper_edge_embedding_distance,
+            use_different_weights_hyper=use_different_weights_hyper,
         )
-        solver = add_constraints(solver=solver, pin_nodes=pin_nodes)
+        solver = add_constraints(
+            solver=solver, pin_nodes=pin_nodes, pin_edges=pin_edges
+        )
 
         with open(ssvm_weights_file_path, "r") as file:
             data = json.load(file)
-            ssvm_weights_array = np.array(
-                [
-                    float(data["Edge Distance_weight"]),
-                    float(data["Edge Distance_constant"]),
-                    float(data["Attrackt Affinity_weight"]),
-                    float(data["Attrackt Affinity_constant"]),
-                    float(data["Appear_weight"]),
-                    float(data["Appear_constant"]),
-                    float(data["Disappear_weight"]),
-                    float(data["Disappear_constant"]),
-                ]
-            )
+            if not use_edge_distance:
+                if edge_embedding_exists and not node_embedding_exists:
+                    ssvm_weights_array = np.array(
+                        [
+                            float(data["Attrackt Affinity_weight"]),
+                            float(data["Attrackt Affinity_constant"]),
+                            float(data["Appear_weight"]),
+                            float(data["Appear_constant"]),
+                            float(data["Disappear_weight"]),
+                            float(data["Disappear_constant"]),
+                        ]
+                    )
+                elif node_embedding_exists and not edge_embedding_exists:
+                    ssvm_weights_array = np.array(
+                        [
+                            float(data["A.E. Embedding Distance_weight"]),
+                            float(data["A.E. Embedding Distance_constant"]),
+                            float(data["Appear_weight"]),
+                            float(data["Appear_constant"]),
+                            float(data["Disappear_weight"]),
+                            float(data["Disappear_constant"]),
+                        ]
+                    )
+            else:
+                if not use_different_weights_hyper:
+                    if edge_embedding_exists and not node_embedding_exists:
+                        if dT > 1:
+                            ssvm_weights_array = np.array(
+                                [
+                                    float(data["Edge Distance_weight"]),
+                                    float(data["Edge Distance_constant"]),
+                                    float(data["Time Gap_weight"]),
+                                    float(data["Time Gap_constant"]),
+                                    float(data["Attrackt Affinity_weight"]),
+                                    float(data["Attrackt Affinity_constant"]),
+                                    float(data["Appear_weight"]),
+                                    float(data["Appear_constant"]),
+                                    float(data["Disappear_weight"]),
+                                    float(data["Disappear_constant"]),
+                                ]
+                            )
+                        else:
+                            ssvm_weights_array = np.array(
+                                [
+                                    float(data["Edge Distance_weight"]),
+                                    float(data["Edge Distance_constant"]),
+                                    float(data["Attrackt Affinity_weight"]),
+                                    float(data["Attrackt Affinity_constant"]),
+                                    float(data["Appear_weight"]),
+                                    float(data["Appear_constant"]),
+                                    float(data["Disappear_weight"]),
+                                    float(data["Disappear_constant"]),
+                                ]
+                            )
+                    elif not edge_embedding_exists and node_embedding_exists:
+                        if dT > 1:
+                            ssvm_weights_array = np.array(
+                                [
+                                    float(data["Edge Distance_weight"]),
+                                    float(data["Edge Distance_constant"]),
+                                    float(data["Time Gap_weight"]),
+                                    float(data["Time Gap_constant"]),
+                                    float(data["A.E. Embedding Distance_weight"]),
+                                    float(data["A.E. Embedding Distance_constant"]),
+                                    float(data["Appear_weight"]),
+                                    float(data["Appear_constant"]),
+                                    float(data["Disappear_weight"]),
+                                    float(data["Disappear_constant"]),
+                                ]
+                            )
+                        else:
+                            ssvm_weights_array = np.array(
+                                [
+                                    float(data["Edge Distance_weight"]),
+                                    float(data["Edge Distance_constant"]),
+                                    float(data["A.E. Embedding Distance_weight"]),
+                                    float(data["A.E. Embedding Distance_constant"]),
+                                    float(data["Appear_weight"]),
+                                    float(data["Appear_constant"]),
+                                    float(data["Disappear_weight"]),
+                                    float(data["Disappear_constant"]),
+                                ]
+                            )
+                    else:
+                        if dT > 1:
+                            ssvm_weights_array = np.array(
+                                [
+                                    float(data["Edge Distance_weight"]),
+                                    float(data["Edge Distance_constant"]),
+                                    float(data["Time Gap_weight"]),
+                                    float(data["Time Gap_constant"]),
+                                    float(data["Appear_weight"]),
+                                    float(data["Appear_constant"]),
+                                    float(data["Disappear_weight"]),
+                                    float(data["Disappear_constant"]),
+                                ]
+                            )
+                        else:
+                            ssvm_weights_array = np.array(
+                                [
+                                    float(data["Edge Distance_weight"]),
+                                    float(data["Edge Distance_constant"]),
+                                    float(data["Appear_weight"]),
+                                    float(data["Appear_constant"]),
+                                    float(data["Disappear_weight"]),
+                                    float(data["Disappear_constant"]),
+                                ]
+                            )
+                else:
+                    if edge_embedding_exists and not node_embedding_exists:
+                        if dT > 1:
+                            ssvm_weights_array = np.array(
+                                [
+                                    float(data["Edge Distance Regular_weight"]),
+                                    float(data["Edge Distance Regular_constant"]),
+                                    float(data["Edge Distance Hyper_weight"]),
+                                    float(data["Edge Distance Hyper_constant"]),
+                                    float(data["Time Gap_weight"]),
+                                    float(data["Time Gap_constant"]),
+                                    float(data["Attrackt Affinity Regular_weight"]),
+                                    float(data["Attrackt Affinity Regular_constant"]),
+                                    float(data["Attrackt Affinity Hyper_weight"]),
+                                    float(data["Attrackt Affinity Hyper_constant"]),
+                                    float(data["Appear_weight"]),
+                                    float(data["Appear_constant"]),
+                                    float(data["Disappear_weight"]),
+                                    float(data["Disappear_constant"]),
+                                ]
+                            )
+                        else:
+                            ssvm_weights_array = np.array(
+                                [
+                                    float(data["Edge Distance Regular_weight"]),
+                                    float(data["Edge Distance Regular_constant"]),
+                                    float(data["Edge Distance Hyper_weight"]),
+                                    float(data["Edge Distance Hyper_constant"]),
+                                    float(data["Attrackt Affinity Regular_weight"]),
+                                    float(data["Attrackt Affinity Regular_constant"]),
+                                    float(data["Attrackt Affinity Hyper_weight"]),
+                                    float(data["Attrackt Affinity Hyper_constant"]),
+                                    float(data["Appear_weight"]),
+                                    float(data["Appear_constant"]),
+                                    float(data["Disappear_weight"]),
+                                    float(data["Disappear_constant"]),
+                                ]
+                            )
+                    elif not edge_embedding_exists and node_embedding_exists:
+                        if dT > 1:
+                            ssvm_weights_array = np.array(
+                                [
+                                    float(data["Edge Distance Regular_weight"]),
+                                    float(data["Edge Distance Regular_constant"]),
+                                    float(data["Edge Distance Hyper_weight"]),
+                                    float(data["Edge Distance Hyper_constant"]),
+                                    float(data["Time Gap_weight"]),
+                                    float(data["Time Gap_constant"]),
+                                    float(
+                                        data["A.E. Embedding Distance Regular_weight"]
+                                    ),
+                                    float(
+                                        data["A.E. Embedding Distance Regular_constant"]
+                                    ),
+                                    float(data["A.E. Embedding Distance Hyper_weight"]),
+                                    float(
+                                        data["A.E. Embedding Distance Hyper_constant"]
+                                    ),
+                                    float(data["Appear_weight"]),
+                                    float(data["Appear_constant"]),
+                                    float(data["Disappear_weight"]),
+                                    float(data["Disappear_constant"]),
+                                ]
+                            )
+                        else:
+                            ssvm_weights_array = np.array(
+                                [
+                                    float(data["Edge Distance Regular_weight"]),
+                                    float(data["Edge Distance Regular_constant"]),
+                                    float(data["Edge Distance Hyper_weight"]),
+                                    float(data["Edge Distance Hyper_constant"]),
+                                    float(
+                                        data["A.E. Embedding Distance Regular_weight"]
+                                    ),
+                                    float(
+                                        data["A.E. Embedding Distance Regular_constant"]
+                                    ),
+                                    float(data["A.E. Embedding Distance Hyper_weight"]),
+                                    float(
+                                        data["A.E. Embedding Distance Hyper_constant"]
+                                    ),
+                                    float(data["Appear_weight"]),
+                                    float(data["Appear_constant"]),
+                                    float(data["Disappear_weight"]),
+                                    float(data["Disappear_constant"]),
+                                ]
+                            )
+                    else:
+                        if dT > 1:
+                            ssvm_weights_array = np.array(
+                                [
+                                    float(data["Edge Distance Regular_weight"]),
+                                    float(data["Edge Distance Regular_constant"]),
+                                    float(data["Edge Distance Hyper_weight"]),
+                                    float(data["Edge Distance Hyper_constant"]),
+                                    float(data["Time Gap_weight"]),
+                                    float(data["Time Gap_constant"]),
+                                    float(data["Appear_weight"]),
+                                    float(data["Appear_constant"]),
+                                    float(data["Disappear_weight"]),
+                                    float(data["Disappear_constant"]),
+                                ]
+                            )
+                        else:
+                            ssvm_weights_array = np.array(
+                                [
+                                    float(data["Edge Distance Regular_weight"]),
+                                    float(data["Edge Distance Regular_constant"]),
+                                    float(data["Edge Distance Hyper_weight"]),
+                                    float(data["Edge Distance Hyper_constant"]),
+                                    float(data["Appear_weight"]),
+                                    float(data["Appear_constant"]),
+                                    float(data["Disappear_weight"]),
+                                    float(data["Disappear_constant"]),
+                                ]
+                            )
 
         solver.weights.from_ndarray(ssvm_weights_array)
         solution = solver.solve(verbose=True)
@@ -278,22 +617,60 @@ def infer(yaml_config_file_name):
         # Step 3 - traccuracy numbers
         # ++++++++
 
-        gt_segmentation = np.zeros(
-            (test_t_max + 1, *tuple(test_image_shape)), dtype=np.uint64
-        )
-        for node, attrs in test_candidate_graph_initial.nodes.items():
-            t, id_ = node.split("_")
-            t, id_ = int(t), int(id_)
-            position = attrs[NodeAttr.POS.value]
-            gt_segmentation[t] = expand_position(
-                data=gt_segmentation[t], position=position, id_=id_
-            )
+        # gt_segmentation = np.zeros(
+        #    (test_t_max + 1, *tuple(test_image_shape)), dtype=np.uint64
+        # )
+        # for node, attrs in test_candidate_graph_initial.nodes.items():
+        #    t, id_ = node.split("_")
+        #    t, id_ = int(t), int(id_)
+        #    position = attrs[NodeAttr.POS.value]
+        #    gt_segmentation[t] = expand_position(
+        #        data=gt_segmentation[t], position=position, id_=id_
+        #    )
 
         new_mapping, res_track, tracked_masks, tracked_graph = save_result(
             solution_nx_graph=graph_to_nx(solution_graph),
-            segmentation_shape=gt_segmentation.shape,
+            segmentation_shape=None,  # gt_segmentation.shape,
             output_tif_dir_name=results_dir_name,
             write_tifs=write_tifs,
+        )
+
+        tracked_array = []
+        solution_nx_graph = graph_to_nx(solution_graph)
+        for edge in solution_nx_graph.edges:
+            u, v = edge
+            t_u, id_u = u.split("_")
+            t_v, id_v = v.split("_")
+            t_u, id_u, t_v, id_v = int(t_u), int(id_u), int(t_v), int(id_v)
+
+            # check if track starts at u
+            in_edges = solution_nx_graph.in_edges(u)
+            if len(in_edges) == 0:
+                tracked_array.append(
+                    [
+                        id_u,
+                        t_u,
+                        test_candidate_graph.nodes[u]["pos"][0],
+                        test_candidate_graph.nodes[u]["pos"][1],
+                        0,
+                    ]
+                )
+
+            tracked_array.append(
+                [
+                    id_v,
+                    t_v,
+                    test_candidate_graph.nodes[v]["pos"][0],
+                    test_candidate_graph.nodes[v]["pos"][1],
+                    id_u,
+                ]
+            )
+
+        tracked_array = np.asarray(tracked_array)
+        np.savetxt(
+            fname=results_dir_name + "/track-detections.csv",
+            X=tracked_array,
+            fmt=["%i", "%i", "%.3f", "%.3f", "%i"],
         )
 
         test_gt_graph = nx.DiGraph()
@@ -321,9 +698,9 @@ def infer(yaml_config_file_name):
                 test_gt_track_graph.nodes[node]["x"] = int(x)
 
         compute_metrics(
-            gt_segmentation=gt_segmentation,
+            gt_segmentation=None,  # gt_segmentation,
             gt_nx_graph=graph_to_nx(test_gt_track_graph),
-            predicted_segmentation=tracked_masks,
+            predicted_segmentation=None,  # tracked_masks,
             pred_nx_graph=tracked_graph,
             results_dir_name=results_dir_name,
         )
