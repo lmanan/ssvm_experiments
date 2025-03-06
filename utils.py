@@ -10,8 +10,12 @@ from motile.constraints import MaxParents, MaxChildren, Pin
 from motile.costs import Appear, Disappear
 from costs import (
     EdgeDistance,
+    EdgeDistanceHyper,
+    EdgeDistanceRegular,
     NodeEmbeddingDistance,
     EdgeEmbeddingDistance,
+    EdgeEmbeddingDistanceHyper,
+    EdgeEmbeddingDistanceRegular,
     TimeGap,
 )
 from motile.variables import NodeSelected, EdgeSelected, NodeAppear, NodeDisappear
@@ -144,10 +148,10 @@ def load_tif_data(segmentation_dir_name: str, add_channel_axis=True):
     return segmentation
 
 
-def load_csv_data(csv_file_name: str, delimiter=" "):
+def load_csv_data(csv_file_name: str, delimiter=" ", voxel_size=[1,1]):
     """Assuming ids are seg_id t z y x p_id"""
     data = np.genfromtxt(fname=csv_file_name, delimiter=delimiter)
-
+    data[:, 2:-1] = data[:, 2:-1]*voxel_size
     return data
 
 
@@ -278,18 +282,53 @@ def add_costs(
     std_node_embedding_distance: float = None,
     mean_edge_embedding_distance: float = None,
     std_edge_embedding_distance: float = None,
+    mean_hyper_edge_distance: float = None,
+    std_hyper_edge_distance: float = None,
+    mean_hyper_edge_embedding_distance: float = None,
+    std_hyper_edge_embedding_distance: float = None,
+    use_different_weights_hyper: bool = False,
 ):
     if use_edge_distance:
-        solver.add_costs(
-            EdgeDistance(
-                weight=1.0,
-                constant=-20.0,
-                position_attribute=NodeAttr.POS.value,
-                mean_edge_distance=mean_edge_distance,
-                std_edge_distance=std_edge_distance,
-            ),
-            name="Edge Distance",
-        )
+        if not use_different_weights_hyper:
+            solver.add_costs(
+                EdgeDistance(
+                    weight=1.0,
+                    constant=0.0,
+                    position_attribute=NodeAttr.POS.value,
+                    mean_edge_distance=mean_edge_distance,
+                    std_edge_distance=std_edge_distance,
+                ),
+                name="Edge Distance",
+            )
+        else:
+            solver.add_costs(
+                EdgeDistanceRegular(
+                    weight=1.0,
+                    constant=0.0,
+                    position_attribute=NodeAttr.POS.value,
+                    mean_edge_distance=mean_edge_distance,
+                    std_edge_distance=std_edge_distance,
+                    mean_hyper_edge_distance=mean_hyper_edge_distance,
+                    std_hyper_edge_distance=std_hyper_edge_distance,
+                ),
+                name="Edge Distance Regular",
+            )
+
+            solver.add_costs(
+                EdgeDistanceHyper(
+                    weight=1.0,
+                    constant=0.0,
+                    position_attribute=NodeAttr.POS.value,
+                    mean_edge_distance=mean_edge_distance,
+                    std_edge_distance=std_edge_distance,
+                    mean_hyper_edge_distance=mean_hyper_edge_distance,
+                    std_hyper_edge_distance=std_hyper_edge_distance,
+                ),
+                name="Edge Distance Hyper",
+            )
+    
+
+
     if dT > 1:
         solver.add_costs(
             TimeGap(weight=1.0, constant=0.0, time_attribute=NodeAttr.TIME.value),
@@ -300,33 +339,63 @@ def add_costs(
             NodeEmbeddingDistance(
                 node_embedding_attribute=NodeAttr.NODE_EMBEDDING.value,
                 weight=1.0,
-                constant=-0.5,
+                constant=-0.0,
                 mean_node_embedding_distance=mean_node_embedding_distance,
                 std_node_embedding_distance=std_node_embedding_distance,
             ),
             name="A.E. Embedding Distance",
         )
     if edge_embedding_exists:
-        solver.add_costs(
-            EdgeEmbeddingDistance(
-                edge_embedding_attribute=EdgeAttr.EDGE_EMBEDDING.value,
-                weight=-1.0,
-                constant=0.5,
-                mean_edge_embedding_distance=mean_edge_embedding_distance,
-                std_edge_embedding_distance=std_edge_embedding_distance,
-            ),
-            name="Attrackt Affinity",
-        )
-    solver.add_costs(Appear(constant=0.6, ignore_attribute="ignore_appear_cost"))
-    solver.add_costs(Disappear(constant=0.6, ignore_attribute="ignore_disappear_cost"))
+        if not use_different_weights_hyper:
+            solver.add_costs(
+                EdgeEmbeddingDistance(
+                    edge_embedding_attribute=EdgeAttr.EDGE_EMBEDDING.value,
+                    weight=-1.0,
+                    constant=0.0,
+                    mean_edge_embedding_distance=mean_edge_embedding_distance,
+                    std_edge_embedding_distance=std_edge_embedding_distance,
+                ),
+                name="Attrackt Affinity",
+            )
+        else:
+            solver.add_costs(
+                EdgeEmbeddingDistanceRegular(
+                    edge_embedding_attribute=EdgeAttr.EDGE_EMBEDDING.value,
+                    weight=-1.0,
+                    constant=0.0,
+                    mean_edge_embedding_distance=mean_edge_embedding_distance,
+                    std_edge_embedding_distance=std_edge_embedding_distance,
+                    mean_hyper_edge_embedding_distance=mean_hyper_edge_embedding_distance,
+                    std_hyper_edge_embedding_distance=std_hyper_edge_embedding_distance,
+                ),
+                name="Attrackt Affinity Regular",
+            )
+
+            solver.add_costs(
+                EdgeEmbeddingDistanceHyper(
+                    edge_embedding_attribute=EdgeAttr.EDGE_EMBEDDING.value,
+                    weight=-1.0,
+                    constant=0.0,
+                    mean_edge_embedding_distance=mean_edge_embedding_distance,
+                    std_edge_embedding_distance=std_edge_embedding_distance,
+                    mean_hyper_edge_embedding_distance=mean_hyper_edge_embedding_distance,
+                    std_hyper_edge_embedding_distance=std_hyper_edge_embedding_distance,
+                ),
+                name="Attrackt Affinity Hyper",
+            )
+
+    solver.add_costs(Appear(constant=1.0, ignore_attribute="ignore_appear_cost"))
+    solver.add_costs(Disappear(constant=1.0, ignore_attribute="ignore_disappear_cost"))
     return solver
 
 
-def add_constraints(solver: motile.Solver, pin_nodes: bool):
+def add_constraints(solver: motile.Solver, pin_nodes: bool, pin_edges: bool):
     solver.add_constraints(MaxParents(1))
     solver.add_constraints(MaxChildren(1))
     if pin_nodes:
         solver.add_constraints(Pin(attribute=NodeAttr.PINNED.value))
+    if pin_edges:
+        solver.add_constraints(Pin(attribute=EdgeAttr.PINNED.value))
     return solver
 
 
