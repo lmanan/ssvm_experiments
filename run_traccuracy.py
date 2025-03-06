@@ -1,6 +1,6 @@
 from traccuracy import run_metrics
 from traccuracy.loaders import load_graph_masks, load_deepcell_data
-from traccuracy.matchers import CTCMatcher
+from traccuracy.matchers import PointMatcher  # ,CTCMatcher
 from traccuracy.metrics import CTCMetrics, DivisionMetrics
 import pprint
 import argparse
@@ -23,7 +23,8 @@ def compute_metrics(
 
     if gt_nx_graph is not None:
         print("Using gt nx graphs ...")
-        gt_data = load_graph_masks(G=gt_nx_graph, masks=gt_segmentation, name="gt")
+        # gt_data = load_graph_masks(G=gt_nx_graph, masks=gt_segmentation, name="gt")
+        gt_data = load_graph_masks(G=gt_nx_graph, masks=None, name="gt")
     elif gt_json_file_name is not None:
         print("Using gt json files ...")
         gt_data = load_deepcell_data(
@@ -32,9 +33,11 @@ def compute_metrics(
 
     if pred_nx_graph is not None:
         print("Using val nx graphs ...")
-        pred_data = load_graph_masks(
-            G=pred_nx_graph, masks=predicted_segmentation, name="pred"
-        )
+        # pred_data = load_graph_masks(
+        #    G=pred_nx_graph, masks=predicted_segmentation, name="pred"
+        # )
+
+        pred_data = load_graph_masks(G=pred_nx_graph, masks=None, name="pred")
     elif predicted_json_file_name is not None:
         print("Using val json files ...")
         pred_data = load_deepcell_data(
@@ -47,7 +50,7 @@ def compute_metrics(
     ctc_results = run_metrics(
         gt_data=gt_data,
         pred_data=pred_data,
-        matcher=CTCMatcher(),
+        matcher=PointMatcher(),  # CTCMatcher(),
         metrics=[CTCMetrics(), DivisionMetrics()],
     )
     pp.pprint(ctc_results)
